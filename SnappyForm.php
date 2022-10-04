@@ -200,8 +200,8 @@ class SnappyForm
 	/* return value(s) from the processed form element
 	input params: 
 		(string) $element_name 	=> "element" OR "element[]"
-		(string) $find 			=> NULL(default)
-		(string) $replace 		=> 'checked'(default)
+		(string) $seek 			=> NULL(default)
+		(string) $return 		=> 'checked'(default)
 	output:
 		(string) or (array)
 		for (string) output provide $element_name like "element" 
@@ -234,7 +234,7 @@ class SnappyForm
 			# user wants a single value only
 			$value = $this->returnSingleValue($element_name);
 
-			# if $find param is defined
+			# if $seek param is defined
 			if ( $seek ) 
 			{
 				# if the original data was in array format
@@ -250,7 +250,7 @@ class SnappyForm
 				# original data was string => do an exact match test
 				else
 				{
-					$value = ( $find == $value ) ? $return : '';
+					$value = ( $seek == $value ) ? $return : '';
 				}
 			}
 
