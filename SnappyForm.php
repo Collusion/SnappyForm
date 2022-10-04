@@ -271,8 +271,18 @@ class SnappyForm
 	
 	/*
 	matches given argument againts $_POST / $_GET fields
-	returns false (if incorrect function names/parameters)
-	returns true if all functions
+	input:  (string) $type ("post" or "get")
+			(array) $required_fields (rules for filtering $_POST/$_GET data
+			$required_fields["element_name"] = array("callback_function");
+	output:
+		true on success 
+		false on failure
+		
+	returns false if:
+	- rules have incorrect callback functions defined
+	- if any callback function return a value that evaluates as false
+	returns true if:
+	- all user defined functions return values that evaluate as true
 	*/
 	public function process_fields($type, array $required_fields)
 	{
