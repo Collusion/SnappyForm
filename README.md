@@ -14,4 +14,7 @@
  
  Please see demo.php for usage instructions
  
+ A form processed with SnappyForm can be tested here:
+ https://www.pickmybra.in/snappy/demo.php
+ 
 
