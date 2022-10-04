@@ -8,9 +8,10 @@
  
  How to get started with SnappyForm<br>
  
-![kuva](https://user-images.githubusercontent.com/3084308/193805101-ba8eb0f1-67af-463d-9964-f740c136c435.png)
+![kuva](https://user-images.githubusercontent.com/3084308/193807182-1a36e68d-0eed-4aa5-b662-2a8f9db42395.png)
 
- Display the actual input & autofill <input> value field and show an error message if needed
+Here is the actual form<br> 
+Notice how SnappyForm can automatically fill value attributes for both text and radio inputs<br>
 
 ![kuva](https://user-images.githubusercontent.com/3084308/193805723-2d38928a-14f8-41d6-a43f-ea630a61ef02.png)
 
