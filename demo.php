@@ -154,31 +154,7 @@ if ( isset($_POST["formsubmit"]) && $SF->process_fields("post", $rules) )
 <body>
 <?php 
 
-
-
 echo $success; 
-/*
-$array = array("", "", "","", "", "");
-
-$start = microtime(true);
-$count = 0;
-for ( $i = 0 ; $i < 1000000 ; ++$i ) 
-{
-	++$count;	 
-}
-echo "++count took " . (microtime(true)-$start) . " seconds\n<br>";
-
-$start = microtime(true);
-$count = 0;
-for ( $i = 0 ; $i < 1000000 ; ++$i ) 
-{
-	$count=1;
-}
-echo "count=1 took " . (microtime(true)-$start) . " seconds\n<br>";
-
-*/
-
-
 
 ?>
 <p>
@@ -251,4 +227,3 @@ echo "count=1 took " . (microtime(true)-$start) . " seconds\n<br>";
 </form>
 </body>
 </html>
-	
