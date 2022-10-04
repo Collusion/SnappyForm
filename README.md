@@ -11,8 +11,8 @@
  ![kuva](https://user-images.githubusercontent.com/3084308/193802749-365f53fc-6765-4036-adaf-1dfab64eb9ee.png)
 
  Display the actual input & autofill <input> value field and show an error message if needed
- 
- ![kuva](https://user-images.githubusercontent.com/3084308/193801629-280e63f3-e9cd-44c2-8db3-9953fa44ddb8.png)
+
+![kuva](https://user-images.githubusercontent.com/3084308/193803606-337e1fae-0391-4a3f-a054-6236b6dd3f62.png)
 
  Please see demo.php for complete usage instructions
  
