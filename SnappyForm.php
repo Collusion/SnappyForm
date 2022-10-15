@@ -15,16 +15,26 @@ class SnappyForm
 		$this->element_values = array();	# element specific values 
 		$this->error_messages = array();	# element specific errors 
 		$this->flattened_arrays = array(); 	# contains flattened array data (multidim => 1d)
-		
+		$this->rules			= array();	# contains filtering rules for the form to be processed
+
+		$this->data						= array();	
+		$this->async_allowed				= false;
 		$this->error_message_pre 		= "";
 		$this->error_message_post 		= "";
 		$this->general_error_message 	= "Error: incorrect value";
+		$this->submit					= 0;
 	}
 	
 	/*
 	In-built helper functions for checking element values
 	You may need to define your own functions as well! 
 	*/
+	
+	/* for checking inputs for exact value, like checkboxes etc */
+	private function value_is($value, $match_value)
+	{
+		return ( $value == $match_value );
+	}
 
 	# checck if the given value is an "integer"
 	# as in "10", "0" etc. and not "10.1" nor "0.1"
@@ -188,20 +198,21 @@ class SnappyForm
 		otherwise an empty string will be returned	*/
 	public function error($element_name)
 	{
-		if ( !empty($this->element_errors[$element_name]) ) 
-		{
-			$emsg = ( !empty($this->error_messages[$element_name]) ) ? $this->error_messages[$element_name] : $this->general_error_message;
-			return $this->error_message_pre . $emsg . $this->error_message_post;
-		}
+		# show error message by default?
+		$visibility = ( empty($this->element_errors[$element_name]) ) ? 'display:none;' : '';
 		
-		return '';
+		$container_pre = "<span id='snappy_$element_name' style='$visibility'>";
+		$container_post = "</span>";
+
+		$emsg = ( !empty($this->error_messages[$element_name]) ) ? $this->error_messages[$element_name] : $this->general_error_message;
+		return $container_pre . $this->error_message_pre . $emsg . $this->error_message_post . $container_post;
 	}
 	
 	/* return value(s) from the processed form element
 	input params: 
 		(string) $element_name 	=> "element" OR "element[]"
-		(string) $seek 			=> NULL(default)
-		(string) $return 		=> 'checked'(default)
+		(string) $find 			=> NULL(default)
+		(string) $replace 		=> 'checked'(default)
 	output:
 		(string) or (array)
 		for (string) output provide $element_name like "element" 
@@ -234,7 +245,7 @@ class SnappyForm
 			# user wants a single value only
 			$value = $this->returnSingleValue($element_name);
 
-			# if $seek param is defined
+			# if $find param is defined
 			if ( $seek ) 
 			{
 				# if the original data was in array format
@@ -261,6 +272,35 @@ class SnappyForm
 		return '';
 	}
 
+	# prints javascript handler ( <script>...</ script>
+	# for asynchronous value checking
+	public function print_async_handler($form_id, $target_file = "")
+	{
+		if ( !$this->async_allowed )return '';
+		if ( empty($form_id) ) 		return '';
+		if ( empty($target_file) ) 	$target_file = basename($_SERVER['SCRIPT_NAME']);
+
+		echo	"<script>"
+				. str_replace(array("myform", "demo.php"), array($form_id, $target_file), file_get_contents("handler.js")) .
+				"</script>";
+	}
+	
+	public function set_rules(array $rules)
+	{
+		$this->rules = $rules;
+		
+		foreach ( $this->rules as $elem_name => $elem_val ) 
+		{
+			$this->clean_rules[str_replace(array("[","]","+"), "", $elem_name)] = 1;
+		}
+	}
+	
+	# allow asynchronous input value checking
+	public function set_async_mode($value)
+	{
+		$this->async_allowed = ( !empty($value) );
+	}
+
 	# resets internal variables 
 	public function resetform()
 	{
@@ -269,31 +309,66 @@ class SnappyForm
 		$this->error_messages = array();
 	}
 	
-	/*
-	matches given argument againts $_POST / $_GET fields
-	input:  (string) $type ("post" or "get")
-			(array) $required_fields (rules for filtering $_POST/$_GET data
-			$required_fields["element_name"] = array("callback_function");
-	output:
-		true on success 
-		false on failure
+	public function process_form($submit_element, $type = false)
+	{	
+		if ( empty($this->rules) )	
+		{
+			trigger_error("Form processing rules not set", E_USER_WARNING);
+			return NULL;
+		}
 		
-	returns false if:
-	- rules have incorrect callback functions defined
-	- if any callback function return a value that evaluates as false
-	returns true if:
-	- all user defined functions return values that evaluate as true
-	*/
-	public function process_fields($type, array $required_fields)
-	{
-		if ( !is_string($type) ) return false;
-		$type = strtolower($type);
-		# type = post or get 
-		if ( $type == 'post' ) 		$data = &$_POST;
-		else if ( $type == 'get' ) 	$data = &$_GET;
-		else 						return false;
+		if ( !is_string($submit_element) ) 
+		{
+			trigger_error("Form submit element must be a string", E_USER_WARNING);
+			return NULL;
+		}
+		
+		if ( is_string($type) ) $type = strtolower($type);
 
-		foreach ( $required_fields as $field => $functions ) 
+		# if type is empty, check both GET + POST
+		if ( isset($_POST) && ($type == 'post' || !$type ) ) 	$this->data = &$_POST;
+		else if ( isset($_GET) && ($type == 'get' || !$type ) ) $this->data = &$_POST;
+		else return NULL;
+
+		# if we are in async mode 
+		if ( isset($this->data["snappy_async_mode"]) ) 
+		{
+			if ( !$this->async_allowed ) exit();
+			
+			if ( $this->data["snappy_async_mode"] != "1" )
+			{
+				# this key contains an element that has no data (e.g. an unchecked checkbox)
+				# check if it can be found from the defined rules with the plus sign (optional element) 
+				# => rules["+element_name"] = array(rules), return 1 if yes, 0 otherwise
+				exit(( isset($this->rules["+".$this->data["snappy_async_mode"]]) ) ? "1" : "0");
+			}
+			
+			# check only the provided form elements and nothing else ! 
+			# delete non-relevant rules
+			foreach ( $this->rules as $elem => $elem_data ) 
+			{
+				$bare_elem = str_replace(array("[]", "+"), "", $elem);
+				if ( !isset($this->data[$bare_elem]) ) 
+				unset($this->rules[$elem]);
+			}
+
+			# instead of returning the result echo "1" or "0" and exit
+			exit(( $this->checkData() ) ? "1" : "0");
+		}
+		
+		return ( isset($this->data[$submit_element]) ) ? $this->checkData() : NULL ;
+	}
+	
+	/*
+	matches defined rules against form data 
+	returns false (if incorrect function names/parameters)
+	returns true if all functions return !empty() value
+	*/
+	private function checkData()
+	{
+		$this->submit = 1;
+		
+		foreach ( $this->rules as $field => $functions ) 
 		{
 			# by default, all provided elements are required
 			$optional_value = false;
@@ -311,7 +386,7 @@ class SnappyForm
 			}
 			
 			# if field cannot be found from GET/POST values or if it's an empty string
-			if ( !isset($data[$field]) || $data[$field] === '' ) 
+			if ( !isset($this->data[$field]) || $this->data[$field] === '' ) 
 			{
 				# mark this field as incorrect
 				if ( !$optional_value ) $this->element_errors[$field] = true;
@@ -320,21 +395,21 @@ class SnappyForm
 			}
 
 			# if given element type and actual value do not match
-			if ( $array_element !== is_array($data[$field]) ) 
+			if ( $array_element !== is_array($this->data[$field]) ) 
 			{
 				$this->element_errors[$field] = true;
 				continue;
 			}
 		
 			# always store the provided element value
-			$this->element_values[$field] = $data[$field];
+			$this->element_values[$field] = $this->data[$field];
 			
 			# if the provided data is an array and it's deemed optional
 			# if all array entries are empty strings, skip function execution
 			if ( $array_element && $optional_value )
 			{
 				# convert multidimensional arrays into 1d
-				$this->flattened_arrays[$field] = $this->flattenArray($data[$field]);
+				$this->flattened_arrays[$field] = $this->flattenArray($this->data[$field]);
 				
 				$flag = 0;
 				foreach ( $this->flattened_arrays[$field] as $item ) 
@@ -348,13 +423,19 @@ class SnappyForm
 				
 				if ( !$flag ) continue;
 			}
+			
+			if ( !is_array($functions) ) 
+			{
+				trigger_error("Incorrect rule format, function array expected", E_USER_WARNING);
+				return null;
+			}
 				
 			foreach ( $functions as $f1 => $f2 ) 
 			{
 				# the function to be called
 				$call_function = $f2;
 				# first parameter passed to the callable function will be the $_POST/$_GET value
-				$call_parameters = array($data[$field]);
+				$call_parameters = array($this->data[$field]);
 				# provided functions are to return "true" by empty() 
 				$wanted_return_value = true;
 				
@@ -408,7 +489,7 @@ class SnappyForm
 				}
 			}
 		}
-		
+
 		# if there are no errors, form values are considered to be OK!
 		return empty($this->element_errors);
 	}		

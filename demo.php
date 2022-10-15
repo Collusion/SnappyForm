@@ -20,7 +20,9 @@ $SF->set_error_messages("Your input was incorrect", $error_pre_html, $error_post
 $error_messages = array("age" 	=> "Age must be between 5 and 100",
 						"email"	=> "A valid email address must be provided",
 						"cities" => "Please select 1-2 cities",
-						"friends" => "Please give a name with 5-40 chars and a valid email address");
+						"friends" => "Please give a name with 5-40 chars and a valid email address",
+						"options" => "Please choose at least one.",
+						"terms" => "You must accept terms&conditions");
 						
 $SF->set_error_messages($error_messages);
 
@@ -69,7 +71,7 @@ $rules = array("name" 	=> array("length" 		=> array(3, 15)),
 				# age is an optional field, so we'll add a plus sign before it's name
 				# but if user fills the element, the value must pass the defined functions
 				# we'll call SnappyForn method is_intval without additional parameters
-				# and inbuilt value_range function with 5 + 100 as parameters
+				# and inbuilt value_range function with 5(min) & 100(max) as parameters
 				"+age"	=> array(	"is_intval",
 									"value_range"	=> array(5, 100)),
 				
@@ -78,6 +80,17 @@ $rules = array("name" 	=> array("length" 		=> array(3, 15)),
 				# and inbuilt value_range function with 1 + 2 as parameters	
 				"+gender" => array(	"is_intval",
 									"value_range"	=> array(1, 2)),
+						
+				# terms and conditions checkbox must return something
+				# well call !empty(), which checks if non empty string is returned
+				# if left unchecked, nothing will be returned and the check will fail				
+				"terms" => array("!empty"),
+				
+				# options array consists of "ints" between 1-3, check them
+				# at least 1 value is required					
+				"options[]" => array("array_is_intval",
+									"array_value_range"	=> array(1, 3),
+									"array_count"		=> array(1, 3)),
 				
 				# cities[] originates from a multiple <select> element
 				# hence will define here with brackets []
@@ -86,7 +99,7 @@ $rules = array("name" 	=> array("length" 		=> array(3, 15)),
 				# array_count (min_count=1,max_count=2)
 				# array_value_range(min=1, max=4)		
 				"cities[]" => array("array_is_intval",
-									"array_count"	=> array(1, 2),
+									"array_count"		=> array(1, 2),
 									"array_value_range" => array(1,4)),
 				
 				# msg element's length must be between 5-100 chars 				
@@ -97,7 +110,7 @@ $rules = array("name" 	=> array("length" 		=> array(3, 15)),
 				# lets use the inbuilt userCheck function for this	
 				# userCheck can handle 2d arrays like this		
 				"+friends[]"	=> array("userCheck"),
-				
+
 				);
 				
 # let's create a custom function for parsing data from "friends" input
@@ -124,16 +137,30 @@ function userCheck(array $data)
 	
 	return true;
 }
-	
-				
-$success = "";
 
+# allow async form checking via inbuilt javascript handler
+# the handler <script> must be printed later with the $SF->print_async_handler method
+# IMPORTANT: your script must not print anything before the $SF->process_form method is called
+# for asynchronous checking, the php handler is allowed to echo only "1" or "0"
+$SF->set_async_mode(true);
+
+# set form filtering rules
+$SF->set_rules($rules);
+				
+# catch form submission by submit element's name:
+# like: <input type='submit' name='formsubmit' value='Submit' />
+# a second parameter can be defined to limit submit check to $_POST / $_GET only => post / get respectively
+# returns true on success (form submitted + data ok)
+# false on failure (form submitted, but incorrect values)
+# null if no form submission detected
+$success = $SF->process_form("formsubmit", "post");
+	
 # check if form has been submitted
 # if yes: let's past the rules to the process_fields() method
-if ( isset($_POST["formsubmit"]) && $SF->process_fields("post", $rules) )
+if ( $success )
 {
 	# yahoo, no errors ! 
-	# now you are free to store / mail the $_POST fields you've checked
+	# now you are free to store / mail the $_GET / $_POST fields you've checked
 	
 	# define a general success message
 	$success = "<h3>Form was submitted successfully</h3>";
@@ -144,7 +171,6 @@ if ( isset($_POST["formsubmit"]) && $SF->process_fields("post", $rules) )
 
 ?>
 
-
 <!DOCTYPE html>
 <!--[if (gte IE 8)|!(IE)]><!--><html lang="en"> <!--<![endif]-->
 <head>
@@ -152,13 +178,10 @@ if ( isset($_POST["formsubmit"]) && $SF->process_fields("post", $rules) )
 </head>
 
 <body>
-<?php 
-
-echo $success; 
-
-?>
+<?php echo $success; ?>
 <p>
-<form method="post">
+
+<form method="post" id="myform">
     <p>
         <label for='name'>Your name *</label><br>
         <!-- value() returns the POST/GET value of the given element, if it's defined -->
@@ -183,6 +206,22 @@ echo $success;
         <input name='gender' id='gender' type='radio' value='1' <?php echo $SF->value("gender", "1", "checked"); ?>/> Male <br>
         <input name='gender' id='gender' type='radio' value='2' <?php echo $SF->value("gender", "2", "checked"); ?>/> Female <br>
         <?php echo $SF->error("gender"); ?>
+    </p>
+    <p>
+        <label for=''>Options *</label><br>
+        <!-- value() takes up to 3 parameters: 'element_name', 'seek' & 'return' -->
+        <!-- if 'seek' is given and it matches element's value, 'return' is returned, otherwise an empty string '' will be returned -->
+        <input name='options[]' type='checkbox' value='1' <?php echo $SF->value("options", "1", "checked"); ?>/> Drinks <br>
+        <input name='options[]' type='checkbox' value='2' <?php echo $SF->value("options", "2", "checked"); ?>/> Dinner <br>
+        <input name='options[]' type='checkbox' value='3' <?php echo $SF->value("options", "3", "checked"); ?>/> Dessert <br>
+        <?php echo $SF->error("options"); ?>
+    </p>
+    <p>
+        Terms and conditions *
+        <!-- value() takes up to 3 parameters: 'element_name', 'seek' & 'return' -->
+        <!-- if 'seek' is given and it matches element's value, 'return' is returned, otherwise an empty string '' will be returned -->
+        <input name='terms' id='terms' type='checkbox' value='yes' <?php echo $SF->value("terms", "yes", "checked"); ?>/> <label for='terms' style='color:#666;'>I accept terms and conditions </label><br>
+        <?php echo $SF->error("terms"); ?>
     </p>
     <p>
         <label for='cities'>Your favorite cities (min 1, max 2) *</label><br>
@@ -225,5 +264,14 @@ echo $success;
     	<input name='formsubmit' type='submit' value='Submit form' />
     </p>
 </form>
+
+<!-- print handler for asynchronous value checks -->
+<!-- Must be called AFTER the actual form! -->
+<!-- parameters: -->
+<!-- form id attribute 		(required: <form id='myform'>)  -->
+<!-- async handler php file (optional, default is the file handler is being called from) -->
+
+<?php $SF->print_async_handler("myform"); ?>
+
 </body>
 </html>
