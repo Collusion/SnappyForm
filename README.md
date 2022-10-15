@@ -5,6 +5,7 @@
  No need for complicated if/else structures<br>
  Supports optional inputs and array data<br>
  Automatic filling for <input> value attributes, <option> selected attributes etc. <br>
+ Asynchronous value checks
  
  How to get started with SnappyForm<br>
  
