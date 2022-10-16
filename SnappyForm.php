@@ -5,6 +5,10 @@ class SnappyForm
 	private $element_errors;
 	private $element_values;
 	private $error_messages;
+	private $flattened_arrays;
+	private $rules;
+	private $data;
+	private $async_allowed;
 	private $error_message_pre;
 	private $error_message_post;
 	private $general_error_message;
@@ -16,13 +20,11 @@ class SnappyForm
 		$this->error_messages = array();	# element specific errors 
 		$this->flattened_arrays = array(); 	# contains flattened array data (multidim => 1d)
 		$this->rules			= array();	# contains filtering rules for the form to be processed
-
 		$this->data						= array();	
-		$this->async_allowed				= false;
+		$this->async_allowed			= false;
 		$this->error_message_pre 		= "";
 		$this->error_message_post 		= "";
 		$this->general_error_message 	= "Error: incorrect value";
-		$this->submit					= 0;
 	}
 	
 	/*
@@ -272,7 +274,7 @@ class SnappyForm
 		return '';
 	}
 
-	# prints javascript handler ( <script>...</ script>
+	# prints javascript handler <script>...</ script>
 	# for asynchronous value checking
 	public function print_async_handler($form_id, $target_file = "")
 	{
@@ -285,17 +287,22 @@ class SnappyForm
 				"</script>";
 	}
 	
+	/* 
+	set form input processing rules
+	input: 
+		an associative array: 
+		rules[element_name] => array(	"filter_fn_1", 
+										"filter_fn_2" => array("param_1", "param_2")
+									)
+	output: null
+	*/
 	public function set_rules(array $rules)
 	{
 		$this->rules = $rules;
-		
-		foreach ( $this->rules as $elem_name => $elem_val ) 
-		{
-			$this->clean_rules[str_replace(array("[","]","+"), "", $elem_name)] = 1;
-		}
 	}
 	
 	# allow asynchronous input value checking
+	# input: true|false
 	public function set_async_mode($value)
 	{
 		$this->async_allowed = ( !empty($value) );
@@ -309,6 +316,26 @@ class SnappyForm
 		$this->error_messages = array();
 	}
 	
+	/*
+	process form data according to the filtering rules set by set_rules()
+	input params:
+	(string) submit_element 
+		=> name attribute of your form's submit button
+		=> <input type='submit' name='my_element' value='submit '/>
+	(string) type (optional)
+		=> 'post' for $_POST data / post method
+		=> 'get' for $_GET data / get method
+	output:
+		null on:
+		=> no rules defined, submit element not defined or incorrect
+		=> no data available (via get/post)
+		=> in asynchronous operation mode, $this->data["snappy_async_mode"] is set
+		   this functions echoes "1" or "0"
+		false on:
+		=> form data does no pass provided rules
+		true on
+		=> form data passes provided rules
+	*/
 	public function process_form($submit_element, $type = false)
 	{	
 		if ( empty($this->rules) )	
@@ -366,8 +393,6 @@ class SnappyForm
 	*/
 	private function checkData()
 	{
-		$this->submit = 1;
-		
 		foreach ( $this->rules as $field => $functions ) 
 		{
 			# by default, all provided elements are required
