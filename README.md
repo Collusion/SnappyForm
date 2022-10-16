@@ -8,8 +8,8 @@
  Asynchronous value checks
  
  How to get started with SnappyForm<br>
- 
-![image](https://user-images.githubusercontent.com/3084308/196056878-752c2eb4-fa89-4337-992f-8a295f628d10.png)
+
+![image](https://user-images.githubusercontent.com/3084308/196056906-f5b3ce82-4024-4f47-9d90-400ba5a970c1.png)
 
  Please see demo.php for complete usage instructions
  
