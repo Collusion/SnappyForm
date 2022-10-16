@@ -9,7 +9,7 @@
  
  How to get started with SnappyForm<br>
  
-![image](https://user-images.githubusercontent.com/3084308/196003576-1546a6c9-4fa3-435a-8c57-0dd720d30ba4.png)
+![image](https://user-images.githubusercontent.com/3084308/196056878-752c2eb4-fa89-4337-992f-8a295f628d10.png)
 
  Please see demo.php for complete usage instructions
  
