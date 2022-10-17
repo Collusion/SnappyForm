@@ -9,6 +9,7 @@ class SnappyForm
 	private $rules;
 	private $data;
 	private $async_allowed;
+	private $loading_msg;
 	private $error_message_pre;
 	private $error_message_post;
 	private $general_error_message;
@@ -22,6 +23,7 @@ class SnappyForm
 		$this->rules			= array();	# contains filtering rules for the form to be processed
 		$this->data						= array();	
 		$this->async_allowed			= false;
+		$this->loading_msg				= "";
 		$this->error_message_pre 		= "";
 		$this->error_message_post 		= "";
 		$this->general_error_message 	= "Error: incorrect value";
@@ -273,18 +275,41 @@ class SnappyForm
 		
 		return '';
 	}
+	
+	# prints an html element containing user defined loading message, hidden by default
+	# this allows a customized positioning for the loader, instead of 
+	# the in-place replacement of the error message
+	# input:  element_name: form element name attribute
+	# output: (string) container containing the custom loading message (if defined)
+	#		  empty string otherwise
+	public function loader($element_name)
+	{
+		$element_name = str_replace("[]", "", $element_name);
+		return ( $this->loading_msg != "" ) ? "<span style='display:none;' id='snappy_loading_".$element_name."'>".$this->loading_msg."</span>" : '';
+	}
 
 	# prints javascript handler <script>...</ script>
 	# for asynchronous value checking
+	# also prints a global variable for holding loading message
 	public function print_async_handler($form_id, $target_file = "")
 	{
 		if ( !$this->async_allowed )return '';
 		if ( empty($form_id) ) 		return '';
 		if ( empty($target_file) ) 	$target_file = basename($_SERVER['SCRIPT_NAME']);
+		$lmsg = "var lm='".str_replace("'", "\'", $this->loading_msg)."'";
 
-		echo	"<script>"
-				. str_replace(array("myform", "demo.php"), array($form_id, $target_file), file_get_contents("handler.js")) .
+		echo	"<script>$lmsg\n"
+				. str_replace(	array("myform", "demo.php"), 
+								array($form_id, $target_file), 
+								file_get_contents("handler.js")) .
 				"</script>";
+	}
+	
+	# sets an optional loading message, when async value check is in progress
+	# will be shown where the error message would be shown
+	public function set_loading_message($msg)
+	{
+		if ( is_string($msg) ) $this->loading_msg = $msg;
 	}
 	
 	/* 

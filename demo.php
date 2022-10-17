@@ -10,7 +10,7 @@ require_once("SnappyForm.php");
 $SF = new SnappyForm();
 
 # format error messages
-$error_pre_html = "<br><span style='color:#ff0000;'>";
+$error_pre_html = "<span style='color:#ff0000;'>";
 $error_post_html = "</span>";
 
 # Set general error message for all elements 
@@ -144,6 +144,10 @@ function userCheck(array $data)
 # for asynchronous checking, the php handler is allowed to echo only "1" or "0"
 $SF->set_async_mode(true);
 
+# set custom loading message to be shown during asynchronous value checks
+# this message will be shown where the errors would be shown normally
+$SF->set_loading_message("<span style=\"color:#666;\">Loading...</span>");
+
 # set form filtering rules
 $SF->set_rules($rules);
 				
@@ -186,17 +190,20 @@ if ( $success )
         <label for='name'>Your name *</label><br>
         <!-- value() returns the POST/GET value of the given element, if it's defined -->
         <!-- value is returned via htmlspecialchars(value, ENT_QUOTES), so it SHOULD be safe to display -->
-        <input name='name' id='name' type='text' value='<?php echo $SF->value("name"); ?>'/>
+        <input name='name' id='name' type='text' value='<?php echo $SF->value("name"); ?>'/> <?php echo $SF->loader("name"); ?>
+        <br>
         <?php echo $SF->error("name"); ?>
     </p>
     <p>
         <label for='email'>Your email address *</label><br>
         <input name='email' id='email' type='text' value='<?php echo $SF->value("email"); ?>'/>
+        <br>
         <?php echo $SF->error("email"); ?>
     </p>
     <p>
         <label for='age'>Your age (optional)</label><br>
         <input name='age' id='age' type='text' value='<?php echo $SF->value("age"); ?>'/>
+        <br>
         <?php echo $SF->error("age"); ?>
     </p>
 	<p>
@@ -220,7 +227,8 @@ if ( $success )
         Terms and conditions *
         <!-- value() takes up to 3 parameters: 'element_name', 'seek' & 'return' -->
         <!-- if 'seek' is given and it matches element's value, 'return' is returned, otherwise an empty string '' will be returned -->
-        <input name='terms' id='terms' type='checkbox' value='yes' <?php echo $SF->value("terms", "yes", "checked"); ?>/> <label for='terms' style='color:#666;'>I accept terms and conditions </label><br>
+        <input name='terms' id='terms' type='checkbox' value='yes' <?php echo $SF->value("terms", "yes", "checked"); ?>/> <label for='terms' style='color:#666;'>I accept terms and conditions </label>
+        <br>
         <?php echo $SF->error("terms"); ?>
     </p>
     <p>
@@ -234,11 +242,14 @@ if ( $success )
             <option value='3' <?php echo $SF->value("cities", "3", "selected"); ?>>Oslo</option>
             <option value='4' <?php echo $SF->value("cities", "4", "selected"); ?>>Stockholm</option>
         </select>
+         <?php echo $SF->loader("cities"); ?>
+        <br>
         <?php echo $SF->error("cities"); ?>
     </p>
     <p>
         <label for='msg'>Your message *</label><br>
         <textarea name='msg' id='msg'><?php echo $SF->value("msg"); ?></textarea>
+        <br>
         <?php echo $SF->error("msg"); ?>
     </p>
     <p>

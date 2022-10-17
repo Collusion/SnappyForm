@@ -27,6 +27,10 @@ function checkElem(e)
 	var val;
 	var tmp = [];
 	
+	// check if the error element actually exists, quit if it doesn't
+	var er = document.getElementById("snappy_"+enp);
+	if ( er == null ) return false;
+	
 	// <select multiple> 
 	if ( e.multiple ) 
 	{
@@ -61,6 +65,20 @@ function checkElem(e)
 	// form the final query
 	var output = (tmp.length ? tmp.join("&") + '&' : '') + "snappy_async_mode=" + ( tmp.length ? '1' : enp+enptail);
 	
+	// check for element specific loading msg positioning
+	var le = document.getElementById("snappy_loading_"+enp);
+	if ( le != null ) 
+	{
+		le.style.display = 'inline';
+	}
+	// if 'loading' message is defined, swap contents with error message
+	else if ( lm != '' ) 
+	{
+		var er_tmp = er.innerHTML;
+		er.innerHTML = lm;
+		er.style.display = 'inline';
+	}
+	
 	var http = new XMLHttpRequest();
 	http.open('POST', 'demo.php', true);
 
@@ -69,12 +87,17 @@ function checkElem(e)
 
 	http.onreadystatechange = function() {//Call a function when the state changes.
 		if(http.readyState == 4 && http.status == 200) {
-			var er = document.getElementById("snappy_"+enp);
-			if ( er != null )
+			
+			if ( le != null ) 
 			{
-				er.style.display = ( http.responseText == "0" ? "inline" : "none");
-				e.removeAttribute("data-changed");
+				le.style.display = 'none';
 			}
+			else if ( lm != '' ) 
+			{
+				er.innerHTML = er_tmp;
+			}
+			er.style.display = ( http.responseText == "0" ? "inline" : "none");
+			e.removeAttribute("data-changed");
 		}
 	}
 	http.send(output);
