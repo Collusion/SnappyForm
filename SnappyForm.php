@@ -173,7 +173,7 @@ class SnappyForm
 	{
 		foreach ( $values as $element_name => $ev ) 
 		{
-			$en = str_replace("[]", "", $element_name, $array_mode);
+			$en = str_replace("[]", "", $element_name);
 		
 			if ( !isset($this->element_values[$en]) && (is_string($ev) || is_array($ev)) ) 
 			{
