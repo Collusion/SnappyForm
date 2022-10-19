@@ -166,6 +166,23 @@ class SnappyForm
 	/* PUBLIC INTERFACING FUNCTIONS */
 	
 	/*
+	sets default values for the form inputs (if value not already set)
+	these will be overwritten by form submit
+	*/
+	public function set_default_values(array $values)
+	{
+		foreach ( $values as $element_name => $ev ) 
+		{
+			$en = str_replace("[]", "", $element_name, $array_mode);
+		
+			if ( !isset($this->element_values[$en]) && (is_string($ev) || is_array($ev)) ) 
+			{
+				$this->element_values[$en] = $ev;
+			}
+		}
+	}
+	
+	/*
 	sets custom error messages for given elements, shown via parser->error("element") call
 	input params: 
 		$e_data string or associative array
@@ -237,7 +254,7 @@ class SnappyForm
 	{
 		$array_mode = 0;
 		$element_name = str_replace("[]", "", $element_name, $array_mode);
-		
+
 		if ( isset($this->element_values[$element_name]) ) 
 		{
 			if ( $array_mode )
@@ -453,7 +470,7 @@ class SnappyForm
 		
 			# always store the provided element value
 			$this->element_values[$field] = $this->data[$field];
-			
+
 			# if the provided data is an array and it's deemed optional
 			# if all array entries are empty strings, skip function execution
 			if ( $array_element && $optional_value )

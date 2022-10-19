@@ -150,6 +150,16 @@ $SF->set_loading_message("<span style=\"color:#666;\">Loading...</span>");
 
 # set form filtering rules
 $SF->set_rules($rules);
+
+# set default values form the form
+# IMPORTANT: ALL individual values (even the numeric ones) must be in STRING format!
+# otherwise they WILL NOT WORK !
+$defaults = array(	"name" 		=> "John Locke", 
+					"cities" 	=> array("2","4"), 
+					"options" 	=> array("2"), 
+					"msg" 		=> "Hello Sir! How are you?");
+					
+$SF->set_default_values($defaults);
 				
 # catch form submission by submit element's name:
 # like: <input type='submit' name='formsubmit' value='Submit' />
