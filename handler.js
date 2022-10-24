@@ -1,3 +1,4 @@
+var er_tmp;
 // check if given element name attr refers to an array input
 // as in it has equal number if '[' and ']'
 function arrayName(n)
@@ -8,15 +9,25 @@ function arrayName(n)
 }
 
 // returns given elements value property, if
-// element is not a checkbox or if it's an unchecked checkbox 
+// element is not a checkbox/radiobut or if it's an unchecked checkbox/radiobut 
 function getValue(e)
 {
-	return ( e.getAttribute('type') === 'checkbox' && !e.checked ? null : e.value );
+	var t = e.getAttribute('type');
+	return ( (t === 'checkbox' || t === 'radio') && !e.checked ? null : encodeURIComponent(e.value) );
+}
+
+// takes element id and state (int) as parameter
+// sets element visible (display "") if id is found and pass == 0
+function setVisibility(id, s)
+{
+	var e = document.getElementById(id);
+	if ( e != null ) e.style.display = ( s ? "none" : "");
 }
 
 // get's given elements all values and send them to
 function checkElem(e)
 {
+	if ( check_enabled == 0 )				return false;
 	if ( typeof e === 'undefined' ) 		return false;
 	if ( !e.hasAttribute("data-changed") ) 	return false;
 
@@ -26,58 +37,87 @@ function checkElem(e)
 	var enptail = '';
 	var val;
 	var tmp = [];
-	
+
 	// check if the error element actually exists, quit if it doesn't
 	var er = document.getElementById("snappy_"+enp);
 	if ( er == null ) return false;
 	
-	// <select multiple> 
-	if ( e.multiple ) 
+	// special case: array[] element, expand element selection
+	if ( !e.multiple && arrayName(e.name) ) 
 	{
-		var arr = Array.from(e.querySelectorAll("option:checked"));
-		
-		for(var i = 0; i < arr.length; ++i)
-		{
-			tmp.push(e.name + "=" + arr[i].value);
-		}
-	}
-	// check if element's name hints array[]
-	else if ( arrayName(e.name) ) 
-	{
-		var type = e.nodeName.toLowerCase();
-		var elist = document.querySelectorAll("#myform "+type+"[name^='"+enp+"[']");
+		var el = document.querySelectorAll("#myform "+e.nodeName.toLowerCase()+"[name^='"+enp+"[']");
 		
 		// fuzzy matching returns multiple element names ! 
-		for ( var i = 0 ; i < elist.length ; ++i )
+		for ( var i = 0 ; i < el.length ; ++i )
 		{
-			val = getValue(elist[i]);
-			if ( val !== null ) tmp.push(elist[i].name + "=" + val);
+			val = getValue(el[i]);
+			if ( val !== null ) tmp.push(el[i].name + "=" + val);
 		}
 		enptail = '[]';
 	}
+	// <select multiple> or single element
 	else
 	{
-		// single value
-		val = getValue(e);
-		if ( val !== null ) tmp.push(e.name + "=" + getValue(e));
+		tmp = getAllValues(e, tmp);
 	}
-	
+
 	// form the final query
-	var output = (tmp.length ? tmp.join("&") + '&' : '') + "snappy_async_mode=" + ( tmp.length ? '1' : enp+enptail);
+	var q = (tmp.length ? tmp.join("&") + '&' : '') + "snappy_async_mode=" + ( tmp.length ? '1' : enp+enptail);
 	
+	var le = document.getElementById("snappy_loading_"+enp); // custom loading text position?
+	request(q, er, le);
+}
+
+// gets all <select multiple> and single element values
+function getAllValues(e, a)
+{
+	var n = encodeURIComponent(e.name);
+	if ( e.multiple ) 
+	{
+		var t = Array.from(e.querySelectorAll("option:checked"));
+		for(var j = 0; j < t.length; ++j)
+		{
+			a.push(n + "=" + getValue(t[j]));
+		}
+	}
+	else
+	{
+		var val = getValue(e);
+		if ( val != null ) a.push(n + "=" + val);
+	}
+	return a;
+}
+
+// displays|hides loading message 
+function loadingState(er, le, s)
+{
 	// check for element specific loading msg positioning
-	var le = document.getElementById("snappy_loading_"+enp);
 	if ( le != null ) 
 	{
-		le.style.display = 'inline';
+		le.style.display = ( s ? "" : "none" );
 	}
-	// if 'loading' message is defined, swap contents with error message
-	else if ( lm != '' ) 
+	// otherwise if 'loading' message is defined, swap contents with error message
+	else if ( er != null && lm != '' )
 	{
-		var er_tmp = er.innerHTML;
-		er.innerHTML = lm;
-		er.style.display = 'inline';
+		if ( s ) 
+		{
+			er_tmp = er.innerHTML;
+			er.style.display = '';
+		}
+		er.innerHTML = ( s ? lm : er_tmp);
 	}
+}
+
+// display success message (if available) and reset form values
+function resetForm()
+{
+	setVisibility("snappy_success_msg", 0);
+	myform.reset();
+}
+
+function request(q, er, le)
+{
+	loadingState(er, le, 1); // show loading message if available
 	
 	var http = new XMLHttpRequest();
 	http.open('POST', 'demo.php', true);
@@ -87,20 +127,18 @@ function checkElem(e)
 
 	http.onreadystatechange = function() {//Call a function when the state changes.
 		if(http.readyState == 4 && http.status == 200) {
-			
-			if ( le != null ) 
+			loadingState(er, le, 0); // hide loading message, show error 
+			const o = JSON.parse(http.responseText);
+			for (const p in o) 
 			{
-				le.style.display = 'none';
+				if ( p == 'success_msg' && !o[p] ) myform.reset();
+
+				setVisibility("snappy_"+p, o[p]);
+				console.log("setVisibility: ", "snappy_"+p, o[p], typeof o[p]);
 			}
-			else if ( lm != '' ) 
-			{
-				er.innerHTML = er_tmp;
-			}
-			er.style.display = ( http.responseText == "0" ? "inline" : "none");
-			e.removeAttribute("data-changed");
 		}
 	}
-	http.send(output);
+	http.send(q);
 }
 
 // add event listeners for input and focusout events for the given form id for input, select and textarea elements
@@ -109,3 +147,23 @@ const delegate = (selector) => (cb) => (e) => e.target.matches(selector) && cb(e
 const inputDelegate = delegate('input, select, textarea');
 myform.addEventListener('input', inputDelegate((el) => el.target.setAttribute("data-changed", "1")));
 myform.addEventListener('focusout', inputDelegate((el) => checkElem(el.target)));
+
+myform.addEventListener("submit", (event) => {
+	if ( submit_enabled )
+	{
+		setVisibility("snappy_success_msg", 1);
+		setVisibility("snappy_failure_msg", 1);
+		event.preventDefault();
+		processForm();
+	}
+  });
+// for submitting the whole form
+function processForm()
+{  
+	var arr = [];
+	for ( var i = 0; i < myform.elements.length; ++i ) 
+	{
+		arr = getAllValues(myform.elements[i], arr);
+	}
+	request(arr.join("&") + "&snappy_async_mode=2", null, null);
+}

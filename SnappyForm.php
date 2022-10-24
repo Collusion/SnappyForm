@@ -9,11 +9,17 @@ class SnappyForm
 	private $rules;
 	private $data;
 	private $async_allowed;
+	private $async_check;
+	private $async_submit;
 	private $loading_msg;
 	private $error_message_pre;
 	private $error_message_post;
 	private $general_error_message;
-
+	private $results;
+	private $success;
+	private $callback;
+	private $failure;
+	
 	public function __construct()
 	{
 		$this->element_errors = array();	# element specific errors 
@@ -23,10 +29,17 @@ class SnappyForm
 		$this->rules			= array();	# contains filtering rules for the form to be processed
 		$this->data						= array();	
 		$this->async_allowed			= false;
+		$this->async_check				= 0;	# allow instantaneous value checks or not?
+		$this->async_submit				= 0;	# allow asynchronous form submits or not ? 
+		$this->async_mode				= 0;	# is this a partial asynchronous value check ? 
 		$this->loading_msg				= "";
 		$this->error_message_pre 		= "";
 		$this->error_message_post 		= "";
 		$this->general_error_message 	= "Error: incorrect value";
+		$this->results					= array();
+		$this->success					= false; # was form submission successful ?
+		$this->callback					= false; # function/method to be called after successful form submit
+		$this->failure					= false; # set true if callback returns false
 	}
 	
 	/*
@@ -182,6 +195,31 @@ class SnappyForm
 		}
 	}
 	
+	# user defined function called automatically upon successful
+	# form submission
+	# input parameter: function's name (must be a valid function!)
+	public function set_callback_function($callback, $callback_class = null)
+	{
+		# try calling this class' method first
+		$fn = ( is_string($callback) ) ? $callback : "";
+		$class = ( is_object($callback_class) ) ? $callback_class : $this;
+		if ( function_exists($fn)) 
+		{
+			$this->callback = $fn;
+		}	
+		else if ( method_exists($class, $fn) )
+		{
+			$this->callback = array($class, $fn);
+		}
+		else
+		{
+			trigger_error("Callback function $fn not found", E_USER_WARNING);
+			return false;
+		}
+
+		return true;
+	}
+	
 	/*
 	sets custom error messages for given elements, shown via parser->error("element") call
 	input params: 
@@ -304,18 +342,39 @@ class SnappyForm
 		$element_name = str_replace("[]", "", $element_name);
 		return ( $this->loading_msg != "" ) ? "<span style='display:none;' id='snappy_loading_".$element_name."'>".$this->loading_msg."</span>" : '';
 	}
+	
+	# prints a container for success message
+	# is directly visible only when a successful form submit is detected
+	# otherwise visibility is toggled via javascript 
+	public function success($msg)
+	{
+		$vis = ( $this->success ) ? '' : 'display:none;' ;
+		return ( is_string($msg) ) ? "<span style='$vis' id='snappy_success_msg'>$msg</span>" : '';
+	}
+	
+	# prints container for failure message
+	# is directly visible only after successful form submission, but failed callback function  
+	# otherwise visibility is toggled via javascript 
+	public function failure($msg)
+	{
+		$vis = ( $this->failure ) ? '' : 'display:none;' ;
+		return ( is_string($msg) ) ? "<span style='$vis' id='snappy_failure_msg'>$msg</span>" : '';
+	}
 
 	# prints javascript handler <script>...</ script>
 	# for asynchronous value checking
 	# also prints a global variable for holding loading message
 	public function print_async_handler($form_id, $target_file = "")
 	{
-		if ( !$this->async_allowed )return '';
+		if ( !$this->async_check && !$this->async_submit ) return '';
 		if ( empty($form_id) ) 		return '';
 		if ( empty($target_file) ) 	$target_file = basename($_SERVER['SCRIPT_NAME']);
-		$lmsg = "var lm='".str_replace("'", "\'", $this->loading_msg)."'";
 
-		echo	"<script>$lmsg\n"
+		echo	
+		"<script>
+		var lm='".str_replace("'", "\'", $this->loading_msg)."';
+		var check_enabled={$this->async_check};
+		var submit_enabled={$this->async_submit};\n"
 				. str_replace(	array("myform", "demo.php"), 
 								array($form_id, $target_file), 
 								file_get_contents("handler.js")) .
@@ -347,7 +406,22 @@ class SnappyForm
 	# input: true|false
 	public function set_async_mode($value)
 	{
+		trigger_error("set_async_mode() is deprecated, please use set_async_check() and set_async_submit() instead", E_USER_NOTICE);
 		$this->async_allowed = ( !empty($value) );
+		$this->async_submit = ( !empty($value) ) ? 1 : 0;
+		$this->async_check = ( !empty($value) ) ? 1 : 0;
+	}
+
+	# enable/disable async form submissions
+	public function set_async_submit($value)
+	{
+		$this->async_submit = ( !empty($value) ) ? 1 : 0;
+	}
+	
+	# enable/disable async input value checks
+	public function set_async_check($value)
+	{
+		$this->async_check = ( !empty($value) ) ? 1 : 0;
 	}
 
 	# resets internal variables 
@@ -372,7 +446,7 @@ class SnappyForm
 		=> no rules defined, submit element not defined or incorrect
 		=> no data available (via get/post)
 		=> in asynchronous operation mode, $this->data["snappy_async_mode"] is set
-		   this functions echoes "1" or "0"
+		   this functions echoes json encoded associative array [element_name] => 1 or 0
 		false on:
 		=> form data does no pass provided rules
 		true on
@@ -402,29 +476,49 @@ class SnappyForm
 		# if we are in async mode 
 		if ( isset($this->data["snappy_async_mode"]) ) 
 		{
-			if ( !$this->async_allowed ) exit();
+			if ( !$this->async_check && !$this->async_submit ) exit();
+			$this->async_mode = $this->data["snappy_async_mode"];
 			
-			if ( $this->data["snappy_async_mode"] != "1" )
+			if ( !is_numeric($this->async_mode) )
 			{
-				# this key contains an element that has no data (e.g. an unchecked checkbox)
+				# this key contains an element name that has no data (e.g. an unchecked checkbox)
 				# check if it can be found from the defined rules with the plus sign (optional element) 
-				# => rules["+element_name"] = array(rules), return 1 if yes, 0 otherwise
-				exit(( isset($this->rules["+".$this->data["snappy_async_mode"]]) ) ? "1" : "0");
+				# => rules["+element_name"] = array(rules), return json array [element_name] => 1 or 0
+				$exists = ( isset($this->rules["+$this->async_mode"]) ) ? 1 : 0;
+				$mode = str_replace(array("[]", "+"), "", $this->async_mode);
+				exit(json_encode(array($mode => $exists)));
 			}
 			
 			# check only the provided form elements and nothing else ! 
 			# delete non-relevant rules
-			foreach ( $this->rules as $elem => $elem_data ) 
+			if ( $this->async_mode == '1' )
 			{
-				$bare_elem = str_replace(array("[]", "+"), "", $elem);
-				if ( !isset($this->data[$bare_elem]) ) 
-				unset($this->rules[$elem]);
+				foreach ( $this->rules as $elem => $elem_data ) 
+				{
+					$bare_elem = str_replace(array("[]", "+"), "", $elem);
+					if ( !isset($this->data[$bare_elem]) ) unset($this->rules[$elem]);
+				}
 			}
+			
+			# unset the 
+			unset($this->data["snappy_async_mode"]);
 
-			# instead of returning the result echo "1" or "0" and exit
-			exit(( $this->checkData() ) ? "1" : "0");
+			# instead of returning the result echo json array (element_name => 1 or 0)
+			# suppress function output
+			ob_start();
+			$this->checkData();
+			ob_end_clean();
+			# if we are doing asynch form submit, include success/failure message visibility variables 
+			if ( $this->async_mode == '2' )
+			{
+				$this->results["success_msg"] = ( $this->success ) ? 0 : 1;
+				$this->results["failure_msg"] = ( $this->failure ) ? 0 : 1;
+			}
+			exit(json_encode($this->results));
 		}
 		
+		# normal operating mode: return true (form values OK), false (form values NOT OK)
+		# NULL (no submission detected)
 		return ( isset($this->data[$submit_element]) ) ? $this->checkData() : NULL ;
 	}
 	
@@ -496,7 +590,7 @@ class SnappyForm
 				trigger_error("Incorrect rule format, function array expected", E_USER_WARNING);
 				return null;
 			}
-				
+
 			foreach ( $functions as $f1 => $f2 ) 
 			{
 				# the function to be called
@@ -553,12 +647,33 @@ class SnappyForm
 				if ( empty($res) === $wanted_return_value ) 
 				{
 					$this->element_errors[$field] = true;
+					continue; # no need to execute the other functions anymore
 				}
 			}
 		}
-
+		
+		# gather data whether individual fields passed
+		foreach ( $this->rules as $field => $functions ) 
+		{
+			$field = str_replace(array("[", "]", "+"), "", $field);
+			$this->results[$field] = ( empty($this->element_errors[$field]) ) ? 1 : 0;
+		}
+		
 		# if there are no errors, form values are considered to be OK!
-		return empty($this->element_errors);
+		$this->success = empty($this->element_errors);
+		
+		# call user defined callback function on success (if defined) and if we are doing a full form submit asynchronously
+		if ( $this->success && !empty($this->callback) && $this->async_mode == '2' ) 
+		{
+			$outcome = call_user_func_array($this->callback, array($this->data));
+			if ( !$outcome ) 
+			{
+				$this->success = false;
+				$this->failure = true;
+			}
+			
+		}
+		return $this->success;
 	}		
 }
 

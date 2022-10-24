@@ -110,6 +110,10 @@ $rules = array("name" 	=> array("length" 		=> array(3, 15)),
 				# lets use the inbuilt userCheck function for this	
 				# userCheck can handle 2d arrays like this		
 				"+friends[]"	=> array("userCheck"),
+				
+				
+				# optional files input (TBD!)	
+				# "+@files"	=> array("filetype" => array("jpg", "jpeg", "gif", "png")),
 
 				);
 				
@@ -138,18 +142,48 @@ function userCheck(array $data)
 	return true;
 }
 
+# example of a user defined callback function
+# which will be called with the submitted data as a parameter after the form has been submitted successfully
+# this function MUST return true on success
+function myCallbackFunction($data)
+{
+	echo "You won't see this text from the callback function,";
+	
+	# send an email or save data into database
+	# return true on success or false on failure
+
+	return true;
+}
+
 # allow async form checking via inbuilt javascript handler
 # the handler <script> must be printed later with the $SF->print_async_handler method
 # IMPORTANT: your script must not print anything before the $SF->process_form method is called
-# for asynchronous checking, the php handler is allowed to echo only "1" or "0"
-$SF->set_async_mode(true);
+# for asynchronous checking, the php handler is allowed to echo only json encoded data
+
+# allow asynchronous form submitting
+$SF->set_async_submit(true);
+
+# allow asynchronous individual input value checking (on focusout events)
+$SF->set_async_check(true);
+
+/* DO NOT USE set_async_mode() ANYMORE, THIS IS NOW DEPRECATED - IT STILL WORKS, BUT WILL BE REMOVED IN THE FUTURE */
+#$SF->set_async_mode(true);
 
 # set custom loading message to be shown during asynchronous value checks
 # this message will be shown where the errors would be shown normally
-$SF->set_loading_message("<span style=\"color:#666;\">Loading...</span>");
+#$SF->set_loading_message("<span style=\"color:#666;\">Loading...</span>");
 
 # set form filtering rules
 $SF->set_rules($rules);
+
+# set callback function to be called upon successful form submission
+# this can be either an user defined function or a method user has added into SnappyForm class
+# THIS FUNCTION MUST RETURN A VALUE! true on success, false on failure
+# otherwise a failure message will be shown ( created by failude() )
+$SF->set_callback_function("myCallbackFunction");
+
+# you can also call a predefined method of the provided (third party) class instance
+#$SF->set_callback_function("method", $classInstance);
 
 # set default values form the form
 # IMPORTANT: ALL individual values (even the numeric ones) must be in STRING format!
@@ -168,17 +202,15 @@ $SF->set_default_values($defaults);
 # false on failure (form submitted, but incorrect values)
 # null if no form submission detected
 $success = $SF->process_form("formsubmit", "post");
-	
+
 # check if form has been submitted
 # if yes: let's past the rules to the process_fields() method
 if ( $success )
 {
 	# yahoo, no errors ! 
-	# now you are free to store / mail the $_GET / $_POST fields you've checked
-	
-	# define a general success message
-	$success = "<h3>Form was submitted successfully</h3>";
-	
+	# now you are free to store / mail the $_GET / $_POST fields you've checked here
+	# or use the set_callback_function() method to set a callback function that will be called automatically
+
 	# reset form fields
 	$SF->resetform(); 
 }
@@ -192,9 +224,17 @@ if ( $success )
 </head>
 
 <body>
-<?php echo $success; ?>
-<p>
+<!-- Prints a success message via the inbuilt success() method -->
+<!-- message will NOT BE PRINT unless a successful submission is detected -->
+<!-- this way the message can also be displayed with asynchronous form submissions -->
+<?php echo $SF->success("<h3>Form was submitted successfully</h3>"); ?>
 
+<!-- Prints a failure message via the inbuilt failure() method -->
+<!-- message will NOT BE PRINT unless a successful form submission is detected, followed by a failed callback function  -->
+<!-- this way the message can also be displayed with asynchronous form submissions -->
+<?php echo $SF->failure("<h3 style='color:#cc0000;'>Sorry, we encountered an internal error, your data was not saved</h3>"); ?>
+
+<p>
 <form method="post" id="myform">
     <p>
         <label for='name'>Your name *</label><br>
