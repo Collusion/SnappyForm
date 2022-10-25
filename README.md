@@ -65,6 +65,10 @@
  # value(string $element_name, string $seek = "", string $return = "")
  - returns submitted value for the given input/element
  - if second parameter is defined and it matches the submitted value, third parameter is returned. returns empty string if values do not match.
+ 
+ # print_async_handler(string $form_id)
+ - prints javascript handler ( < script> ... < /script> ) for asynchronous value checks and form submission
+ - takes form id attribute as parameter 
 
 
  
