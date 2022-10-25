@@ -25,10 +25,10 @@
  - $rules["element_name_1"] = array("filter_function_1");
  - $rules["element_name_2"] = array("filter_function_2" => array("param1", "param2"));
 
- # set_async_submit(true|false $value)
+ # set_async_submit(bool $value)
  - enable / disable asynchronous form submissions
  
- # set_async_check(true|false $value)
+ # set_async_check(bool $value)
  - enable / disable asynchronous individual input value checks
  
  # set_callback_function(string $function_name, obj $instance = null)
