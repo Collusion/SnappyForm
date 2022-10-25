@@ -46,6 +46,9 @@
  # process_form(string $input_element, string $form_method = "")
  - processes form data, is triggered by form element named $input_element
  - $form_method can be null/empty, "post" or "get"
+ - returns NULL if no form submission was detected, 
+ - false if input values failed to pass the defined rules
+ - true if input values passed the rule check
 
  # resetform(void)
  - resets all form values to defaults (for example, after successful submission)
