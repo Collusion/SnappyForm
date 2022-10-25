@@ -69,7 +69,7 @@
  # print_async_handler(string $form_id)
  - prints javascript handler ( < script> ... < /script> ) for asynchronous value checks and form submission
  - takes form id attribute as parameter 
- - it's important to call this function after the actual form
+ - call this function only after the form has been printed, not before it!
 
 
  
