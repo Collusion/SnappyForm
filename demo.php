@@ -13,6 +13,12 @@ $SF = new SnappyForm();
 $error_pre_html = "<span style='color:#ff0000;'>";
 $error_post_html = "</span>";
 
+# if you want to process multiple forms with the same SnappyForm instance
+# you need to use the form_filter() method to specify which form is now being configured
+# later on the same form_filter() method must be called prior outputting form values 
+# with success(), failure(), error(), value() etc methods
+#$SF->form_filter("my_submit_element_name");
+
 # Set general error message for all elements 
 $SF->set_error_messages("Your input was incorrect", $error_pre_html, $error_post_html);
 
@@ -30,19 +36,14 @@ $SF->set_error_messages($error_messages);
 now, let's define how the different elements should be processed
 these can be either native php functions, user defined php functions 
 or methods built in into SnappyForm class
-
-
 usage
 ---------------------------------------------------
-
 $rules = array( "element_name_1" => "function_name"
 				"element_name_2" => "function_name"
 				...
 				"element_name_X" => "function_name");
-
 # multiple functions for single element
 $rules = array("element_name" => array("function_name_1", "function_name_2"));
-
 # multiple functions with parameters for single element
 $rules = array("element_name" => array(	"function_name_1" => array("param1", "param2"), 
 										"function_name_2",
@@ -58,7 +59,6 @@ element_name[]	=> required, multi value input (array)
 +element_name[]	=> optional, multi value input (array)
 				   defined functions will be executed if any array value is != ""
 				   if all array values are empty strings, functions will be skipped
-
 */
 
 				# let's call inbuilt function length 
@@ -110,6 +110,10 @@ $rules = array("name" 	=> array("length" 		=> array(3, 15)),
 				# lets use the inbuilt userCheck function for this	
 				# userCheck can handle 2d arrays like this		
 				"+friends[]"	=> array("userCheck"),
+				
+				
+				# optional files input (TBD!)	
+				# "+@files"	=> array("filetype" => array("jpg", "jpeg", "gif", "png")),
 
 				);
 				
@@ -138,18 +142,46 @@ function userCheck(array $data)
 	return true;
 }
 
+# example of a user defined callback function
+# which will be called with the submitted data as a parameter after the form has been submitted successfully
+# this function MUST return true on success
+function myCallbackFunction($data)
+{
+	echo "You won't see this text from the callback function";
+	
+	# send an email or save data into database
+	# return true on success or false on failure
+
+	return true;
+}
+
 # allow async form checking via inbuilt javascript handler
-# the handler <script> must be printed later with the $SF->print_async_handler method
-# IMPORTANT: your script must not print anything before the $SF->process_form method is called
-# for asynchronous checking, the php handler is allowed to echo only "1" or "0"
-$SF->set_async_mode(true);
+# the handler <script> must be printed later with the $SF->print_async_handler() method
+# IMPORTANT: 	your script must not print anything before the $SF->process_form() method is called
+# 				if you do not use a separate file for processing the form submits (defined by an optional parameter
+# for asynchronous checking, the php handler is allowed to echo only json encoded data
+
+# allow asynchronous form submitting
+$SF->set_async_submit(true);
+
+# allow asynchronous individual input value checking (on focusout events)
+$SF->set_async_check(true);
 
 # set custom loading message to be shown during asynchronous value checks
 # this message will be shown where the errors would be shown normally
-$SF->set_loading_message("<span style=\"color:#666;\">Loading...</span>");
+#$SF->set_loading_message("<span style=\"color:#666;\">Loading...</span>");
 
 # set form filtering rules
 $SF->set_rules($rules);
+
+# set callback function to be called upon successful form submission
+# this can be either an user defined function or a method user has added into SnappyForm class
+# THIS FUNCTION MUST RETURN A VALUE! true on success, false on failure
+# otherwise a failure message will be shown ( created by failude() )
+$SF->set_callback_function("myCallbackFunction");
+
+# you can also call a predefined method of the provided (third party) class instance
+#$SF->set_callback_function("method", $classInstance);
 
 # set default values form the form
 # IMPORTANT: ALL individual values (even the numeric ones) must be in STRING format!
@@ -163,22 +195,22 @@ $SF->set_default_values($defaults);
 				
 # catch form submission by submit element's name:
 # like: <input type='submit' name='formsubmit' value='Submit' />
-# a second parameter can be defined to limit submit check to $_POST / $_GET only => post / get respectively
+# first parameter is the submit's element name (string) or (array) if multiple forms/submit element's are present
+# an optional second parameter can be defined to limit submit check to $_POST / $_GET only => post / get respectively
 # returns true on success (form submitted + data ok)
 # false on failure (form submitted, but incorrect values)
 # null if no form submission detected
 $success = $SF->process_form("formsubmit", "post");
-	
+#$success = $SF->process_form(array("registration", "login"), "post"); # process multiple forms
+
 # check if form has been submitted
 # if yes: let's past the rules to the process_fields() method
 if ( $success )
 {
 	# yahoo, no errors ! 
-	# now you are free to store / mail the $_GET / $_POST fields you've checked
-	
-	# define a general success message
-	$success = "<h3>Form was submitted successfully</h3>";
-	
+	# now you are free to store / mail the $_GET / $_POST fields you've checked here
+	# or use the set_callback_function() method to set a callback function that will be called automatically
+
 	# reset form fields
 	$SF->resetform(); 
 }
@@ -192,10 +224,25 @@ if ( $success )
 </head>
 
 <body>
-<?php echo $success; ?>
-<p>
 
-<form method="post" id="myform">
+<!-- if you want to process multiple forms with the same SnappyForm instance -->
+<!-- you need to use the form_filter() method to specify which form is now being configured -->
+<!-- later on the same form_filter() method must be called prior outputting form values -->
+<!-- with success(), failure(), error(), value() etc methods -->
+<!-- $SF->form_filter("my_submit_element_name"); -->
+
+<!-- Prints a success message via the inbuilt success() method -->
+<!-- message will NOT BE PRINT unless a successful submission is detected -->
+<!-- this way the message can also be displayed with asynchronous form submissions -->
+<?php echo $SF->success("<h3>Form was submitted successfully</h3>"); ?>
+
+<!-- Prints a failure message via the inbuilt failure() method -->
+<!-- message will NOT BE PRINT unless a successful form submission is detected, followed by a failed callback function  -->
+<!-- this way the message can also be displayed with asynchronous form submissions -->
+<?php echo $SF->failure("<h3 style='color:#cc0000;'>Sorry, we encountered an internal error, your data was not saved</h3>"); ?>
+
+<p>
+<form method="post">
     <p>
         <label for='name'>Your name *</label><br>
         <!-- value() returns the POST/GET value of the given element, if it's defined -->
@@ -287,12 +334,11 @@ if ( $success )
 </form>
 
 <!-- print handler for asynchronous value checks -->
-<!-- Must be called AFTER the actual form! -->
+<!-- Must be called AFTER all the forms processed by SnappyForm ! -->
 <!-- parameters: -->
-<!-- form id attribute 		(required: <form id='myform'>)  -->
-<!-- async handler php file (optional, default is the file handler is being called from) -->
+<!-- 1. async handler php file (OPTIONAL, default is the file handler is being called from) -->
 
-<?php $SF->print_async_handler("myform"); ?>
+<?php $SF->print_async_handler(); ?>
 
 </body>
 </html>

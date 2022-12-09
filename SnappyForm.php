@@ -7,33 +7,70 @@ class SnappyForm
 	private $error_messages;
 	private $flattened_arrays;
 	private $rules;
+	private $rule_storage;
+	private $selected_form;
 	private $data;
-	private $async_allowed;
+	private $async_mode;
+	private $async_check;
+	private $async_submit;
 	private $loading_msg;
 	private $error_message_pre;
 	private $error_message_post;
 	private $general_error_message;
-
+	private $results;
+	private $success;
+	private $callback;
+	private $failure;
+	private $default_values;
+	private $submit_elements;
+	
 	public function __construct()
 	{
-		$this->element_errors = array();	# element specific errors 
-		$this->element_values = array();	# element specific values 
-		$this->error_messages = array();	# element specific errors 
-		$this->flattened_arrays = array(); 	# contains flattened array data (multidim => 1d)
-		$this->rules			= array();	# contains filtering rules for the form to be processed
+		$this->flattened_arrays 		= array(); 	# contains flattened array data (multidim => 1d)	
+		$this->default_form				= 0;
+		$this->resetform				= NULL;		# which form was reset ? 
+		$this->submitted_form			= NULL; 	# which form submit element was detected ? 
+		$this->selected_form			= ''; 		# which form is selected by the user? 
+		$this->separator				= '__';
 		$this->data						= array();	
-		$this->async_allowed			= false;
-		$this->loading_msg				= "";
+		$this->results					= array();
 		$this->error_message_pre 		= "";
 		$this->error_message_post 		= "";
-		$this->general_error_message 	= "Error: incorrect value";
+		$this->rules					= array();	# actionable rules defined for the current form 
+		$this->async_mode				= 0;		# is this a partial asynchronous value check ? 
+		$this->submit_elements			= array(); 	# stores first parameter provided to process_form()
+
+		# set default settings for the current (default) form
+		$this->format_form_settings($this->default_form);
+	}
+	
+	/* "formats" settings for given form name
+	these variables can contain settings for multiple forms at the same time */
+	private function format_form_settings($index)
+	{
+		# set the default settings only once (do not overwrite)
+		if ( !isset($this->error_messages[$index]) )
+		{
+			$this->error_messages[$index] 			= array();	# element specific errors
+			$this->rule_storage[$index]				= array();	# for storing one/multiple rulesets
+			$this->async_check[$index]				= 0;	# allow instantaneous value checks or not? CONTINUE FROM HERE 28112022
+			$this->async_submit[$index]				= 0;	# allow asynchronous form submits or not ? 
+			$this->loading_msg[$index]				= "";	# loading message (asynch value checks)
+			$this->general_error_message[$index] 	= "Error: incorrect value";
+			$this->success[$index]					= false; # was form submission successful ?
+			$this->callback[$index]					= false; # function/method to be called after successful form submit
+			$this->failure[$index]					= false; # set true if callback returns false
+			$this->element_errors[$index] 			= array(); # element specific errors 
+			$this->element_values[$index] 			= array(); # element specific values 
+			$this->default_values[$index]			= array(); # default form element values
+		}
 	}
 	
 	/*
 	In-built helper functions for checking element values
 	You may need to define your own functions as well! 
 	*/
-	
+
 	/* for checking inputs for exact value, like checkboxes etc */
 	private function value_is($value, $match_value)
 	{
@@ -141,14 +178,14 @@ class SnappyForm
 	or in array format, when array will be fully iterated and first value in string format will be returned
 	any subsequent calls on array data will return next (string) value from array, until values run out
 	*/
-	private function returnSingleValue($element_name)
+	private function returnSingleValue($data, $element_name)
 	{
-		if ( is_array($this->element_values[$element_name]) )
+		if ( is_array($data) )
 		{
 			if ( !isset($this->flattened_arrays[$element_name]) ) 
 			{
 				# flatten the array into 1d (do it only once)
-				$this->flattened_arrays[$element_name] = $this->flattenArray($this->element_values[$element_name]);
+				$this->flattened_arrays[$element_name] = $this->flattenArray($data);
 			}
 			# create a reference for a cleaner code
 			$arr = &$this->flattened_arrays[$element_name];
@@ -157,10 +194,30 @@ class SnappyForm
 			next($arr); # otherwise increment array pointer
 			return $tmp;
 		}
-		else
-		{
-			return $this->element_values[$element_name];
-		}
+		
+		return $data;
+	}
+	
+	/* 
+	finds out if settings have been defined for the given submit_element by form_filter('submit_element')
+	if settings are defined, the given submit_element is returned
+	if settings have not been defined, $this->default_form (default index) is returned instead
+	if form_filter() has been called, but not with the given submit_element, return false
+	*/
+	private function findActiveForm($value)
+	{
+		# definition found, return submit elements name
+		if ( isset($this->success[$value]) ) return $value;
+		
+		# if no form_filter() calls, return default_form (index), otherwise false
+		return ( count($this->success) === 1 ) ? $this->default_form : false;
+	}
+	
+	/* returns the index of the currently active for set with form_filter()
+	if form is not set, returns default index (0) */
+	private function getActiveForm()
+	{
+		return ( !empty($this->selected_form) ) ? $this->selected_form : 0;
 	}
 
 	/* PUBLIC INTERFACING FUNCTIONS */
@@ -168,18 +225,49 @@ class SnappyForm
 	/*
 	sets default values for the form inputs (if value not already set)
 	these will be overwritten by form submit
-	*/
-	public function set_default_values(array $values)
+	*/ 
+	public function set_default_values(array $values, $index = false)
 	{
+		# get active form's name
+		$index = ( $index ) ? $index : $this->getActiveForm();
+
+		# check values before storing them
 		foreach ( $values as $element_name => $ev ) 
 		{
 			$en = str_replace("[]", "", $element_name);
 		
-			if ( !isset($this->element_values[$en]) && (is_string($ev) || is_array($ev)) ) 
+			if ( is_string($ev) || is_array($ev) ) 
 			{
-				$this->element_values[$en] = $ev;
+				$this->default_values[$index][$en] = $ev;
 			}
 		}
+	}
+	
+	# user defined function called automatically upon successful
+	# form submission
+	# input parameter: function's name (must be a valid function!)
+	public function set_callback_function($callback, $callback_class = null)
+	{
+		$index = $this->getActiveForm();
+		
+		# try calling this class' method first
+		$fn = ( is_string($callback) ) ? $callback : "";
+		$class = ( is_object($callback_class) ) ? $callback_class : $this;
+		if ( function_exists($fn)) 
+		{
+			$this->callback[$index] = $fn;
+		}	
+		else if ( method_exists($class, $fn) )
+		{
+			$this->callback[$index] = array($class, $fn);
+		}
+		else
+		{
+			trigger_error("Callback function $fn not found", E_USER_WARNING);
+			return false;
+		}
+
+		return true;
 	}
 	
 	/*
@@ -194,6 +282,9 @@ class SnappyForm
 	*/
 	public function set_error_messages($e_data, $html_pre = '', $html_post = '')
 	{
+		# get active form's name
+		$index = $this->getActiveForm();
+		
 		if ( is_array($e_data) ) 
 		{
 			foreach ( $e_data as $e_name => $e_msg ) 
@@ -201,12 +292,12 @@ class SnappyForm
 				# remove []+ chars from element_name
 				$e_name = str_replace(array("[", "]", "+"), "", $e_name);
 				
-				if ( is_string($e_msg) ) $this->error_messages[$e_name] = $e_msg;
+				if ( is_string($e_msg) ) $this->error_messages[$index][$e_name] = $e_msg;
 			}
 		}
 		else if ( is_string($e_data) )
 		{
-			$this->general_error_message = $e_data;
+			$this->general_error_message[$index] = $e_data;
 		}
 		
 		# set error pre/post html
@@ -216,19 +307,38 @@ class SnappyForm
 	
 	/* checks if given element has error messages defined
 		if it has, a predefined error message will be returned
-		otherwise an empty string will be returned	*/
-	public function error($element_name)
+		otherwise an empty string will be returned	
+	input params:
+		(string) $element_name, form element name attribute
+		(bool)	$async_enabled = true, if set to false, no id will be set for the
+				error container, which means async checks will be disabled for this element 	
+		*/
+	public function error($element_name, $async_enabled = true)
 	{
-		# show error message by default?
-		$visibility = ( empty($this->element_errors[$element_name]) ) ? 'display:none;' : '';
+		$index = $this->getActiveForm();
+		$prefix = $index . $this->separator;
 		
-		$container_pre = "<span id='snappy_$element_name' style='$visibility'>";
+		# show error message by default?
+		$visibility = ( empty($this->element_errors[$index][$element_name]) ) ? 'display:none;' : '';
+
+		$id = ( $async_enabled ) ? "{$prefix}snappy_$element_name" : '';
+		$container_pre = "<span id='$id' style='$visibility'>";
 		$container_post = "</span>";
 
-		$emsg = ( !empty($this->error_messages[$element_name]) ) ? $this->error_messages[$element_name] : $this->general_error_message;
+		$emsg = ( !empty($this->error_messages[$index][$element_name]) ) ? $this->error_messages[$index][$element_name] : $this->general_error_message[$index];
 		return $container_pre . $this->error_message_pre . $emsg . $this->error_message_post . $container_post;
 	}
 	
+	public function getRules()
+	{
+		return $this->rule_storage;
+	}
+	
+	public function getResults()
+	{
+		return $this->results;
+	}
+
 	/* return value(s) from the processed form element
 	input params: 
 		(string) $element_name 	=> "element" OR "element[]"
@@ -254,17 +364,34 @@ class SnappyForm
 	{
 		$array_mode = 0;
 		$element_name = str_replace("[]", "", $element_name, $array_mode);
+		
+		# get currently active form's index
+		$index = $this->getActiveForm();
+		
+		$element_data = null;
+		# try accessing submitted values first
+		if ( isset($this->element_values[$index][$element_name]) )
+		{
+			$element_data = &$this->element_values[$index][$element_name];
+		}
+		# use default values only when:
+		# the submitted form is not the form we are currently printing
+		# OR the submitted form is the same form that was just reset
+		else if ( ($this->submitted_form != $index || $this->resetform == $this->submitted_form) && isset($this->default_values[$index][$element_name]) ) 
+		{
+			$element_data = &$this->default_values[$index][$element_name];
+		}
 
-		if ( isset($this->element_values[$element_name]) ) 
+		if ( $element_data ) 
 		{
 			if ( $array_mode )
 			{
 				# "element[]" => user wants all values, return the original provided data
-				return $this->element_values[$element_name];
+				return $element_data;
 			}
 			
 			# user wants a single value only
-			$value = $this->returnSingleValue($element_name);
+			$value = $this->returnSingleValue($element_data, $element_name);
 
 			# if $find param is defined
 			if ( $seek ) 
@@ -289,10 +416,10 @@ class SnappyForm
 			# return element value 
 			return htmlspecialchars($value, ENT_QUOTES);
 		}
-		
+
 		return '';
 	}
-	
+
 	# prints an html element containing user defined loading message, hidden by default
 	# this allows a customized positioning for the loader, instead of 
 	# the in-place replacement of the error message
@@ -301,32 +428,87 @@ class SnappyForm
 	#		  empty string otherwise
 	public function loader($element_name)
 	{
+		$index = $this->getActiveForm();
+		$prefix = $index . $this->separator;
+		
 		$element_name = str_replace("[]", "", $element_name);
-		return ( $this->loading_msg != "" ) ? "<span style='display:none;' id='snappy_loading_".$element_name."'>".$this->loading_msg."</span>" : '';
+		return ( !empty($this->loading_msg[$index]) ) ? # 
+				"<span style='display:none;' id='{$prefix}snappy_loading_".$element_name."'>".$this->loading_msg[$index]."</span>" : '';
+	}
+	
+	# prints a container for success message
+	# is directly visible only when a successful form submit is detected
+	# otherwise visibility is toggled via javascript 
+	public function success($msg)
+	{
+		$index = $this->getActiveForm();
+		$prefix = $index . $this->separator;
+		
+		$vis = ( !empty($this->success[$index]) ) ? '' : 'display:none;' ;
+		return ( is_string($msg) ) ? "<span style='$vis' id='{$prefix}snappy_success_msg'>$msg</span>" : '';
+	}
+	
+	# prints container for failure message
+	# is directly visible only after successful form submission, but failed callback function  
+	# otherwise visibility is toggled via javascript 
+	public function failure($msg)
+	{
+		$index = $this->getActiveForm();
+		$prefix = $index . $this->separator;
+		
+		$vis = ( !empty($this->failure[$index]) ) ? '' : 'display:none;' ;
+		return ( is_string($msg) ) ? "<span style='$vis' id='{$prefix}snappy_failure_msg'>$msg</span>" : '';
 	}
 
 	# prints javascript handler <script>...</ script>
 	# for asynchronous value checking
-	# also prints a global variable for holding loading message
-	public function print_async_handler($form_id, $target_file = "")
+	public function print_async_handler($target_file = "")
 	{
-		if ( !$this->async_allowed )return '';
-		if ( empty($form_id) ) 		return '';
-		if ( empty($target_file) ) 	$target_file = basename($_SERVER['SCRIPT_NAME']);
-		$lmsg = "var lm='".str_replace("'", "\'", $this->loading_msg)."'";
-
-		echo	"<script>$lmsg\n"
-				. str_replace(	array("myform", "demo.php"), 
-								array($form_id, $target_file), 
-								file_get_contents("handler.js")) .
-				"</script>";
+		# new method
+		$output = '';
+		foreach ( $this->submit_elements as $i => $submit_name ) 
+		{
+			$index = $this->findActiveForm($submit_name);
+			
+			if ( $index !== false ) 
+			{
+				$prefix = $index . $this->separator;
+				$check_enabled	= $this->async_check[$index];
+				$submit_enabled	= $this->async_submit[$index];
+				
+				if ( !$check_enabled && !$submit_enabled ) continue;
+				
+				if ( empty($target_file) ) $target_file = basename($_SERVER['SCRIPT_NAME']);
+				
+				$output .=  "\n(function() {\n".
+							"let prefix='$prefix';\n".
+							"let lm='".str_replace("'", "\'", $this->loading_msg[$index])."';\n".	
+							str_replace(array("myform", "demo.php", "check_enabled", "submit_enabled"), 
+										array($submit_name, $target_file, $check_enabled, $submit_enabled), 
+										file_get_contents("handler.js")) . 
+							"\n})();";
+		
+			}
+		}
+		
+		if ( !empty($output) ) 
+		{
+			echo "<script>\n".
+				"(function() {
+				".file_get_contents("handler_functions.js").
+				"\n$output".
+				"\n})();".
+				"\n</script>";
+		}
 	}
 	
 	# sets an optional loading message, when async value check is in progress
 	# will be shown where the error message would be shown
 	public function set_loading_message($msg)
 	{
-		if ( is_string($msg) ) $this->loading_msg = $msg;
+		$index = $this->getActiveForm();
+		
+		if ( is_string($msg) ) $this->loading_msg[$index] = $msg;
 	}
 	
 	/* 
@@ -336,26 +518,65 @@ class SnappyForm
 		rules[element_name] => array(	"filter_fn_1", 
 										"filter_fn_2" => array("param_1", "param_2")
 									)
+		OPTIONAL: (string) submit_element (form submit element name attribute)
+				  ties submitted rules to a certain submit_element / form only
 	output: null
 	*/
 	public function set_rules(array $rules)
 	{
-		$this->rules = $rules;
+		# rules will be tied to a certain submit element / form only
+		$index = $this->getActiveForm();
+		$this->rule_storage[$index] = $rules;
+	}
+
+	# enable/disable async form submissions
+	public function set_async_submit($value)
+	{
+		$index = $this->getActiveForm();
+		$this->async_submit[$index] = ( !empty($value) ) ? 1 : 0;
 	}
 	
-	# allow asynchronous input value checking
-	# input: true|false
-	public function set_async_mode($value)
+	# enable/disable async input value checks
+	public function set_async_check($value)
 	{
-		$this->async_allowed = ( !empty($value) );
+		$index = $this->getActiveForm();
+		$this->async_check[$index] = ( !empty($value) ) ? 1 : 0;
 	}
 
 	# resets internal variables 
 	public function resetform()
 	{
-		$this->element_errors = array();
-		$this->element_values = array();
-		$this->error_messages = array();
+		if ( isset($this->submitted_form) )
+		{
+			$this->element_errors[$this->submitted_form] = array();
+			$this->element_values[$this->submitted_form] = array();
+			$this->error_messages[$this->submitted_form] = array();
+			
+			# save information of which form was reset
+			$this->resetform = $this->submitted_form;
+		}
+	}
+	
+	/*
+	selects which form (if many are defined) is in use currently
+	affects when setting form filtering rules
+	and when printing form values via value(), error() etc.
+	input parameter:
+		(string) submit_element form  
+	*/
+	public function form_filter($submit_element)
+	{
+		# in this case, submit element needs to be $this->default_form
+		if ( $submit_element === false ) $submit_element = $this->default_form;
+
+		if ( is_string($submit_element) || $submit_element === $this->default_form ) 
+		{
+			# set default values for the given form name  
+			$this->flattened_arrays = array(); # reset flattened arrays
+			$this->format_form_settings($submit_element);
+			$this->selected_form = $submit_element;
+		}
+		else trigger_error("Parameter must be either boolean false or a non-empty string", E_USER_WARNING);
 	}
 	
 	/*
@@ -372,60 +593,135 @@ class SnappyForm
 		=> no rules defined, submit element not defined or incorrect
 		=> no data available (via get/post)
 		=> in asynchronous operation mode, $this->data["snappy_async_mode"] is set
-		   this functions echoes "1" or "0"
+		   this functions echoes json encoded associative array [element_name] => 1 or 0
 		false on:
 		=> form data does no pass provided rules
 		true on
 		=> form data passes provided rules
 	*/
-	public function process_form($submit_element, $type = false)
+	public function process_form($element_name, $type = false)
 	{	
-		if ( empty($this->rules) )	
+		$this->submit_elements = array();
+		# check that submit element is defined
+		if ( is_string($element_name) )
 		{
-			trigger_error("Form processing rules not set", E_USER_WARNING);
+			$this->submit_elements[] = $element_name;
+		}
+		else if ( is_array($element_name) ) 
+		{
+			foreach ( $element_name as $s_value )
+			{
+				if ( !is_string($s_value) || $s_value === '' ) 
+				{
+					trigger_error("Form submit element must be a string or an array of strings", E_USER_WARNING);
+					return NULL;
+				}
+				
+				$this->submit_elements[] = $s_value;
+			}
+		}
+		else
+		{
+			trigger_error("Form submit element must be a string or an array of strings", E_USER_WARNING);
 			return NULL;
 		}
-		
-		if ( !is_string($submit_element) ) 
-		{
-			trigger_error("Form submit element must be a string", E_USER_WARNING);
-			return NULL;
-		}
-		
+
 		if ( is_string($type) ) $type = strtolower($type);
 
 		# if type is empty, check both GET + POST
 		if ( isset($_POST) && ($type == 'post' || !$type ) ) 	$this->data = &$_POST;
-		else if ( isset($_GET) && ($type == 'get' || !$type ) ) $this->data = &$_POST;
+		else if ( isset($_GET) && ($type == 'get' || !$type ) ) $this->data = &$_GET;
 		else return NULL;
-
-		# if we are in async mode 
-		if ( isset($this->data["snappy_async_mode"]) ) 
-		{
-			if ( !$this->async_allowed ) exit();
-			
-			if ( $this->data["snappy_async_mode"] != "1" )
-			{
-				# this key contains an element that has no data (e.g. an unchecked checkbox)
-				# check if it can be found from the defined rules with the plus sign (optional element) 
-				# => rules["+element_name"] = array(rules), return 1 if yes, 0 otherwise
-				exit(( isset($this->rules["+".$this->data["snappy_async_mode"]]) ) ? "1" : "0");
-			}
-			
-			# check only the provided form elements and nothing else ! 
-			# delete non-relevant rules
-			foreach ( $this->rules as $elem => $elem_data ) 
-			{
-				$bare_elem = str_replace(array("[]", "+"), "", $elem);
-				if ( !isset($this->data[$bare_elem]) ) 
-				unset($this->rules[$elem]);
-			}
-
-			# instead of returning the result echo "1" or "0" and exit
-			exit(( $this->checkData() ) ? "1" : "0");
-		}
 		
-		return ( isset($this->data[$submit_element]) ) ? $this->checkData() : NULL ;
+		# index of the last element
+		$limit = count($this->submit_elements) - 1;
+		
+		foreach ( $this->submit_elements as $i => $submit_element ) 
+		{
+			# save the submit element for later use
+			$index = $this->findActiveForm($submit_element);
+			
+			if ( $index === false ) return null;
+			
+			# find correct ruleset for the defined submit_element
+			if ( isset($this->rule_storage[$index]) ) $this->rules = &$this->rule_storage[$index];
+			else 	
+			{
+				trigger_error("Form processing rules not set for $index", E_USER_WARNING);
+				return NULL;
+			}
+			
+			# if we are doing an async value check (single value or form submit)
+			if ( isset($this->data["snappy_async_mode"]) ) 
+			{
+				# if current submit_element is not found in the POST/GET data
+				# or if both async_check & async_submit are disabled
+				# skip it & go to next one; on last element execute exit() with empty json output
+				if ( !isset($this->data[$submit_element]) || (!$this->async_check[$index] && !$this->async_submit[$index]) )
+				{
+					# if no match at the last loop, run exit() with empty json output
+					if ( $i === $limit ) 
+					{
+						exit(json_encode(array())); # last form to process and still no match => exit 
+					}
+					
+					continue; # try the next submit element
+				}
+				
+				$this->async_mode = $this->data["snappy_async_mode"];
+				
+				# at this point we know we have correct $submit_element 
+				if ( !is_numeric($this->async_mode) )
+				{
+					# this key contains an element name that has no data (e.g. an unchecked checkbox)
+					# check if it can be found from the defined rules with the plus sign (optional element) 
+					# => rules["+element_name"] = array(rules), return json array [element_name] => 1 or 0
+					$exists = ( isset($this->rules["+$this->async_mode"]) ) ? 1 : 0;
+					$mode = str_replace(array("[]", "+"), "", $this->async_mode);
+					exit(json_encode(array($mode => $exists)));
+				}
+				
+				# check only the provided form elements and nothing else ! 
+				# delete non-relevant rules
+				if ( $this->async_mode == '1' )
+				{
+					foreach ( $this->rules as $elem => $elem_data ) 
+					{
+						$bare_elem = str_replace(array("[]", "+"), "", $elem);
+						if ( !isset($this->data[$bare_elem]) ) unset($this->rules[$elem]);
+					}
+				}
+				
+				# unset the snappy async mode variable
+				unset($this->data["snappy_async_mode"]);
+	
+				# which form is active now ? 
+				$this->submitted_form = $index;
+				# instead of returning the result echo json array (element_name => 1 or 0)
+				# suppress function output
+				ob_start();
+				$this->checkData();
+				ob_end_clean();
+				# if we are doing asynch form submit, include success/failure message visibility variables 
+				if ( $this->async_mode == '2' )
+				{
+					$this->results["success_msg"] = ( $this->success[$index] ) ? 0 : 1;
+					$this->results["failure_msg"] = ( $this->failure[$index] ) ? 0 : 1;
+				}
+				exit(json_encode($this->results));
+			}
+	
+			# synchronous mode 
+			if ( isset($this->data[$submit_element]) ) 
+			{
+				# which form is active now ? 
+				$this->submitted_form = $index;
+
+				return ( $this->checkData() ) ? $submit_element : false;
+			}
+		}
+
+		return NULL;
 	}
 	
 	/*
@@ -435,11 +731,17 @@ class SnappyForm
 	*/
 	private function checkData()
 	{
+		# get submitted form's name
+		$index = $this->submitted_form;
+		
 		foreach ( $this->rules as $field => $functions ) 
 		{
 			# by default, all provided elements are required
 			$optional_value = false;
-			
+
+			# skip user defined functions? (by default no)
+			$skip = 0;
+
 			# check if element name hints array type: element_name[]
 			$bracket_count = 0;
 			$field = str_replace("[]", "", $field, $bracket_count);
@@ -453,23 +755,31 @@ class SnappyForm
 			}
 			
 			# if field cannot be found from GET/POST values or if it's an empty string
-			if ( !isset($this->data[$field]) || $this->data[$field] === '' ) 
+			if ( !isset($this->data[$field]) )
 			{
-				# mark this field as incorrect
-				if ( !$optional_value ) $this->element_errors[$field] = true;
-
-				continue; # always skip empty optional values
+				$skip = 1;
 			}
+			else if ( $this->data[$field] === '' ) 
+			{
+				$this->element_values[$index][$field] = $this->data[$field];
+				$skip = 1;	
+			}
+			
+			# value is required, but its empty: set error for this field
+			if ( !$optional_value && $skip ) $this->element_errors[$index][$field] = true;
+			
+			# skip user defined functions
+			if ( $skip ) continue;
 
 			# if given element type and actual value do not match
 			if ( $array_element !== is_array($this->data[$field]) ) 
 			{
-				$this->element_errors[$field] = true;
+				$this->element_errors[$index][$field] = true;
 				continue;
 			}
 		
 			# always store the provided element value
-			$this->element_values[$field] = $this->data[$field];
+			$this->element_values[$index][$field] = $this->data[$field];
 
 			# if the provided data is an array and it's deemed optional
 			# if all array entries are empty strings, skip function execution
@@ -496,7 +806,7 @@ class SnappyForm
 				trigger_error("Incorrect rule format, function array expected", E_USER_WARNING);
 				return null;
 			}
-				
+
 			foreach ( $functions as $f1 => $f2 ) 
 			{
 				# the function to be called
@@ -513,6 +823,19 @@ class SnappyForm
 
 					if ( is_array($f2) ) 
 					{
+						# check for element value definitions, like: {element_name}
+						foreach ( $f2 as $fi => $param ) 
+						{
+							$matches = array();
+							preg_match_all('/{\K[^}]*(?=})/m', $param, $matches);
+							# we want exactly one match!
+							if ( count($matches[0]) === 1 ) 
+							{
+								# we have a valid element, like: {element}
+								$f2[$fi] = ( isset($this->data[$matches[0][0]])) ? $this->data[$matches[0][0]] : NULL ;
+							}
+						}
+						
 						$call_parameters = array_merge($call_parameters, $f2);
 					}
 					else
@@ -542,7 +865,7 @@ class SnappyForm
 				{
 					trigger_error("Unknown function: {$call_function}()", E_USER_WARNING);
 					# stated method unavailable
-					$this->element_errors[$field] = true;
+					$this->element_errors[$index][$field] = true;
 					continue;
 				}
 				
@@ -552,13 +875,35 @@ class SnappyForm
 				# function output must evaluate as true by !empty(), otherwise it's an error
 				if ( empty($res) === $wanted_return_value ) 
 				{
-					$this->element_errors[$field] = true;
+					$this->element_errors[$index][$field] = true;
+					continue; # no need to execute the other functions anymore
 				}
 			}
 		}
-
+		
+		# gather data whether individual fields passed
+		foreach ( $this->rules as $field => $functions ) 
+		{
+			$field = str_replace(array("[", "]", "+"), "", $field);
+			$this->results[$field] = ( empty($this->element_errors[$index][$field]) ) ? 1 : 0;
+		}
+		
 		# if there are no errors, form values are considered to be OK!
-		return empty($this->element_errors);
+		$this->success[$index] = empty($this->element_errors[$index]);
+		
+		# call user defined callback function on success (if defined) and if we are doing a full form submit asynchronously
+		if ( $this->success[$index] && !empty($this->callback[$index]) && $this->async_mode == '2' ) 
+		{
+			$outcome = call_user_func_array($this->callback[$index], array($this->data));
+			if ( !$outcome ) 
+			{
+				$this->success[$index] = false;
+				$this->failure[$index] = true;
+			}
+			
+		}
+		
+		return $this->success[$index];
 	}		
 }
 
