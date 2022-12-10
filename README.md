@@ -14,12 +14,16 @@
  
  A list of methods:
  
- #  set_error_messages(string | array $msg)
+ # form_filter(string $submit_element)
+ - Required only if multiple forms are to be processed.
+ - Calling this before deploying settings or printing form values limits the effects on that particular form only. 
+
+ # set_error_messages(string | array $msg)
  - takes a string or an associative array as parameter, sets general or element specific error messages
  - $msg = "This error message will be shown for all inputs";
  - $msg["element_name"] = "element specific error message";
 
- #  set_rules(array $rules)
+ # set_rules(array $rules)
  - sets input filtering rules for different inputs
  - associative array formats: 
  - $rules["element_name_1"] = array("filter_function_1");
@@ -43,8 +47,9 @@
  - default values can be set for the form inputs with this method
  - associative array format: $values["element_name"] = "element default value";
  
- # process_form(string $input_element, string $form_method = "")
- - processes form data, is triggered by form element named $input_element
+ # process_form(string|array $element_name, string $form_method = "")
+ - processes form data, is triggered by form element named $element_name
+ - also accepts multiple element names in array format, if multiple forms are processed with the same SnappyForm instance
  - $form_method can be null/empty, "post" or "get"
  - returns NULL if no form submission was detected, 
  - false if input values failed to pass the defined rules
@@ -69,9 +74,9 @@
  - returns submitted value for the given input/element
  - if second parameter is defined and it matches the submitted value, third parameter is returned. returns empty string if values do not match.
  
- # print_async_handler(string $form_id)
+ # print_async_handler(string $target_file = "")
  - prints javascript handler ( < script> ... < /script> ) for asynchronous value checks and form submission
- - takes form id attribute as parameter 
+ - takes $target_file as an optional parameter - required only if the form is printed and processed in different files
  - call this function only after the form has been printed, not before it!
 
 
