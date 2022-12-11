@@ -13,6 +13,7 @@ class SnappyForm
 	private $async_mode;
 	private $async_check;
 	private $async_submit;
+	private $async_reset;
 	private $loading_msg;
 	private $error_message_pre;
 	private $error_message_post;
@@ -23,7 +24,7 @@ class SnappyForm
 	private $failure;
 	private $default_values;
 	private $submit_elements;
-	
+
 	public function __construct()
 	{
 		$this->flattened_arrays 		= array(); 	# contains flattened array data (multidim => 1d)	
@@ -55,6 +56,7 @@ class SnappyForm
 			$this->rule_storage[$index]				= array();	# for storing one/multiple rulesets
 			$this->async_check[$index]				= 0;	# allow instantaneous value checks or not? CONTINUE FROM HERE 28112022
 			$this->async_submit[$index]				= 0;	# allow asynchronous form submits or not ? 
+			$this->async_reset[$index]				= 1;	# reset form after successful async submit? 1=yes 2=no
 			$this->loading_msg[$index]				= "";	# loading message (asynch value checks)
 			$this->general_error_message[$index] 	= "Error: incorrect value";
 			$this->success[$index]					= false; # was form submission successful ?
@@ -542,6 +544,13 @@ class SnappyForm
 		$index = $this->getActiveForm();
 		$this->async_check[$index] = ( !empty($value) ) ? 1 : 0;
 	}
+	
+	# enable/disable form reset after successful async submit
+	public function set_async_reset($value)
+	{
+		$index = $this->getActiveForm();
+		$this->async_reset[$index] = ( !empty($value) ) ? 1 : 2;
+	}
 
 	# resets internal variables 
 	public function resetform()
@@ -676,7 +685,7 @@ class SnappyForm
 					# this key contains an element name that has no data (e.g. an unchecked checkbox)
 					# check if it can be found from the defined rules with the plus sign (optional element) 
 					# => rules["+element_name"] = array(rules), return json array [element_name] => 1 or 0
-					$exists = ( isset($this->rules["+$this->async_mode"]) ) ? 1 : 0;
+					$exists = ( isset($this->rules["+$this->async_mode"]) ) ? 0 : 1;
 					$mode = str_replace(array("[]", "+"), "", $this->async_mode);
 					exit(json_encode(array($mode => $exists)));
 				}
@@ -705,8 +714,8 @@ class SnappyForm
 				# if we are doing asynch form submit, include success/failure message visibility variables 
 				if ( $this->async_mode == '2' )
 				{
-					$this->results["success_msg"] = ( $this->success[$index] ) ? 0 : 1;
-					$this->results["failure_msg"] = ( $this->failure[$index] ) ? 0 : 1;
+					$this->results["success_msg"] = ( $this->success[$index] ) ? $this->async_reset[$index] : 0;
+					$this->results["failure_msg"] = ( $this->failure[$index] ) ? 1 : 0;
 				}
 				exit(json_encode($this->results));
 			}
@@ -885,7 +894,7 @@ class SnappyForm
 		foreach ( $this->rules as $field => $functions ) 
 		{
 			$field = str_replace(array("[", "]", "+"), "", $field);
-			$this->results[$field] = ( empty($this->element_errors[$index][$field]) ) ? 1 : 0;
+			$this->results[$field] = ( empty($this->element_errors[$index][$field]) ) ? 0 : 1;
 		}
 		
 		# if there are no errors, form values are considered to be OK!

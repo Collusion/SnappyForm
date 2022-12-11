@@ -15,8 +15,8 @@ if ( sbmit != null && prefix != null )
 	if ( submit_enabled )
 	{ 
 		form.addEventListener("submit", (event) => {
-			setVisibility("snappy_success_msg", 1, prefix);
-			setVisibility("snappy_failure_msg", 1, prefix);
+			setVisibility(prefix+"snappy_success_msg", 0);
+			setVisibility(prefix+"snappy_failure_msg", 0);
 			event.preventDefault();
 			processForm('demo.php', form, prefix, lm);
 		});

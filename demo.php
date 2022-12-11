@@ -161,11 +161,14 @@ function myCallbackFunction($data)
 # 				if you do not use a separate file for processing the form submits (defined by an optional parameter
 # for asynchronous checking, the php handler is allowed to echo only json encoded data
 
-# allow asynchronous form submitting
+# allow asynchronous form submitting (default false)
 $SF->set_async_submit(true);
 
-# allow asynchronous individual input value checking (on focusout events)
+# allow asynchronous individual input value checking (on focusout events) (default false)
 $SF->set_async_check(true);
+
+# reset form values after successful async submit ? (default true)
+$SF->set_async_reset(true);
 
 # set custom loading message to be shown during asynchronous value checks
 # this message will be shown where the errors would be shown normally

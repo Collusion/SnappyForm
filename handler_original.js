@@ -1,4 +1,8 @@
 var er_tmp;
+var form;
+var sbmit = document.querySelector("[name='myform'][type='submit']");
+if ( sbmit != null ) form = sbmit.form;
+
 // check if given element name attr refers to an array input
 // as in it has equal number if '[' and ']'
 function arrayName(n)
@@ -17,19 +21,20 @@ function getValue(e)
 }
 
 // takes element id and state (int) as parameter
-// sets element visible (display "") if id is found and s is non-zero
+// sets element visible (display "") if id is found and pass == 0
 function setVisibility(id, s)
 {
-	var e = document.getElementById(id);
-	if ( e != null ) e.style.display = ( s ? "" : "none");
+	var e = document.getElementById(prefix+id);
+	if ( e != null ) e.style.display = ( s ? "none" : "");
 }
 
 // get's given elements all values and send them to
-function checkElem(file, form, e, attr, prefix, lm)
+function checkElem(e)
 {
-	if ( form == null || 
-		typeof e === 'undefined' || 
-		!e.hasAttribute("data-changed") ) return false;
+	if ( 	form == null || 
+			check_enabled == 0 || 
+			typeof e === 'undefined' || 
+			!e.hasAttribute("data-changed") ) return false;
 
 	// process the element name, get rid of []
 	var enp = e.name.split("[");
@@ -62,11 +67,10 @@ function checkElem(file, form, e, attr, prefix, lm)
 	}
 	
 	// form the final query
-	var q = (tmp.length ? tmp.join("&") + '&' : '') + "snappy_async_mode=" + ( tmp.length ? '1' : enp+enptail) + "&" + attr + "=1";
+	var q = (tmp.length ? tmp.join("&") + '&' : '') + "snappy_async_mode=" + ( tmp.length ? '1' : enp+enptail) + "&myform=1";
 
 	var le = document.getElementById(prefix+"snappy_loading_"+enp); // custom loading text position?
-	request(file, q, er, le, prefix, lm, form);
-	e.removeAttribute("data-changed");
+	request(q, er, le);
 }
 
 // gets all <select multiple> and single element values
@@ -90,7 +94,7 @@ function getAllValues(e, a)
 }
 
 // displays|hides loading message 
-function loadingState(er, le, s, lm)
+function loadingState(er, le, s)
 {
 	// check for element specific loading msg positioning
 	if ( le != null ) 
@@ -109,24 +113,31 @@ function loadingState(er, le, s, lm)
 	}
 }
 
-function request(file, q, er, le, prefix, lm, form)
+// display success message (if available) and reset form values
+function resetForm()
+{
+	setVisibility("snappy_success_msg", 0);
+	form.reset();
+}
+
+function request(q, er, le)
 {	
-	loadingState(er, le, 1, lm); // show loading message if available
+	loadingState(er, le, 1); // show loading message if available
 	
 	var http = new XMLHttpRequest();
-	http.open('POST', file, true);
+	http.open('POST', 'demo.php', true);
 
 	//Send the proper header information along with the request
 	http.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
 
 	http.onreadystatechange = function() {//Call a function when the state changes.
 		if(http.readyState == 4 && http.status == 200) {
-			loadingState(er, le, 0, lm); // hide loading message, show error 
+			loadingState(er, le, 0); // hide loading message, show error 
 			const o = JSON.parse(http.responseText);
 			for (const p in o) 
 			{
-				if ( p == 'success_msg' && o[p] == 1 ) form.reset();
-				setVisibility(prefix+"snappy_"+p, o[p]);
+				if ( p == 'success_msg' && !o[p] ) form.reset();
+				setVisibility("snappy_"+p, o[p]);
 			}
 		}
 	}
@@ -134,12 +145,29 @@ function request(file, q, er, le, prefix, lm, form)
 }
 
 // for submitting the whole form
-function processForm(file, form, prefix, lm)
+function processForm()
 {  
 	var arr = [];
 	for ( var i = 0; i < form.elements.length; ++i ) 
 	{
 		arr = getAllValues(form.elements[i], arr);
 	}
-	request(file, arr.join("&") + "&snappy_async_mode=2", null, null, prefix, lm, form);
+	request(arr.join("&") + "&snappy_async_mode=2", null, null);
 }
+
+// add event listeners for input and focusout events for the given form id for input, select and textarea elements
+// checkElem() is executed only on 'focusout' if 'input' event is detected before that
+const delegate = (selector) => (cb) => (e) => e.target.matches(selector) && cb(e);
+const inputDelegate = delegate('input, select, textarea');
+form.addEventListener('input', inputDelegate((el) => el.target.setAttribute("data-changed", "1")));
+form.addEventListener('focusout', inputDelegate((el) => checkElem(el.target)));
+
+form.addEventListener("submit", (event) => {
+	if ( submit_enabled && form != null )
+	{
+		setVisibility("snappy_success_msg", 1);
+		setVisibility("snappy_failure_msg", 1);
+		event.preventDefault();
+		processForm();
+	}
+  });
