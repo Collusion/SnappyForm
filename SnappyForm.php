@@ -167,7 +167,7 @@ class SnappyForm
 			else if ( $maxdepth ) 
 			{
 				# we must go deeper...
-				$this->flattenArray($value, --$maxdepth, $accumulator);
+				$this->flattenArray($value, $maxdepth-1, $accumulator);
 			}
 		}
 		
@@ -228,10 +228,10 @@ class SnappyForm
 	sets default values for the form inputs (if value not already set)
 	these will be overwritten by form submit
 	*/ 
-	public function set_default_values(array $values, $index = false)
+	public function set_default_values(array $values)
 	{
 		# get active form's name
-		$index = ( $index ) ? $index : $this->getActiveForm();
+		$index = $this->getActiveForm();
 
 		# check values before storing them
 		foreach ( $values as $element_name => $ev ) 
