@@ -35,6 +35,9 @@
  # set_async_check(bool $value)
  - enable / disable asynchronous individual input value checks
  
+ # set_async_reset(bool $value)
+ - enabled / disable form reset after successful asynchronous submit
+ 
  # set_callback_function(string $function_name, obj $instance = null)
  - calls $function_name after successful form submission.
  - If $instance is provided, method named $function_name will be called from the provided instance
