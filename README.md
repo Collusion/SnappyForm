@@ -49,6 +49,7 @@
  # set_default_values(array $values)
  - default values can be set for the form inputs with this method
  - associative array format: $values["element_name"] = "element default value";
+ - this method can be called multiple times, but defining the same element_name again will overwrite previous settings for that given element
  
  # process_form(string|array $element_name, string $form_method = "")
  - processes form data, is triggered by form element named $element_name
