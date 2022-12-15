@@ -901,7 +901,7 @@ class SnappyForm
 		$this->success[$index] = empty($this->element_errors[$index]);
 		
 		# call user defined callback function on success (if defined) and if we are doing a full form submit asynchronously
-		if ( $this->success[$index] && !empty($this->callback[$index]) && $this->async_mode == '2' ) 
+		if ( $this->success[$index] && !empty($this->callback[$index]) && (empty($this->async_mode) || $this->async_mode == '2') ) 
 		{
 			$outcome = call_user_func_array($this->callback[$index], array($this->data));
 			if ( !$outcome ) 
