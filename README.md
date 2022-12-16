@@ -65,7 +65,8 @@
  - resets all form values to defaults (for example, after successful submission)
 
  # success(string $success_message)
- - returns a success message after successful form submission
+ - returns a success message after successful form submission (=rule check passed)
+ - if callback function is defined, (bool)true output value is expected for success message to be shown
 
  # failure(string $callback_failure_message)
  - returns an error, if callback function is defined and it returns a non true value
