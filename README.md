@@ -41,6 +41,8 @@
  # set_callback_function(string $function_name, obj $instance = null)
  - calls $function_name after successful form submission.
  - If $instance is provided, method named $function_name will be called from the provided instance
+ - required for asynchronous form submits!
+ - this function must return true or false
  
  # set_loading_message(string $loading_message)
  - a loading message can be shown during the asynchronous input value checks
@@ -73,6 +75,7 @@
  
  # loader(string $element_name)
  - places the loading message, which will be shown during asynchronous input value checks (if set)
+ - if loading message is defined and loader() is not called, the loading message will be shown in the element specific error message container instead
  
  # value(string $element_name, string $seek = "", string $return = "")
  - returns submitted value for the given input/element
