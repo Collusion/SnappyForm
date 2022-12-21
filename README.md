@@ -38,6 +38,11 @@
  # set_async_reset(bool $value)
  - enabled / disable form reset after successful asynchronous submit
  
+ # set_submit_loading_value(string $value | bool false)
+ - if set, replaces form submit button's value with the given $value after it has been clicked
+ - also disables the button until a response is received from the server
+ - works even if set_async_submit() is set to false
+ 
  # set_callback_function(string $function_name, obj $instance = null)
  - calls $function_name after successful form submission.
  - If $instance is provided, method named $function_name will be called from the provided instance
