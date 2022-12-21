@@ -147,8 +147,10 @@ function userCheck(array $data)
 # this function MUST return true on success
 function myCallbackFunction($data)
 {
-	echo "You won't see this text from the callback function";
-	
+	# in async mode any output from callback function will be suppressed
+	# but with synchronous submits output is visible 
+	echo "This is output from the callback function"; 
+
 	# send an email or save data into database
 	# return true on success or false on failure
 
@@ -170,6 +172,11 @@ $SF->set_async_check(true);
 # reset form values after successful async submit ? (default true)
 $SF->set_async_reset(true);
 
+# set_submit_loading_value() replaces submit button's value after clicking it & disables it temporarily
+# value is reverted back to original value after a completed asynchronous submit
+# this works also for synchronous submits, even with set_async_submit() set to false
+$SF->set_submit_loading_value("Please wait...");
+
 # set custom loading message to be shown during asynchronous value checks
 # this message will be shown where the errors would be shown normally
 #$SF->set_loading_message("<span style=\"color:#666;\">Loading...</span>");
@@ -180,7 +187,7 @@ $SF->set_rules($rules);
 # set callback function to be called upon successful form submission
 # this can be either an user defined function or a method user has added into SnappyForm class
 # THIS FUNCTION MUST RETURN A VALUE! true on success, false on failure
-# otherwise a failure message will be shown ( created by failude() )
+# otherwise a failure message will be shown ( created by failure() )
 $SF->set_callback_function("myCallbackFunction");
 
 # you can also call a predefined method of the provided (third party) class instance
@@ -188,13 +195,11 @@ $SF->set_callback_function("myCallbackFunction");
 
 # set default values form the form
 # IMPORTANT: ALL individual values (even the numeric ones) must be in STRING format!
-# otherwise they WILL NOT WORK !
-$defaults = array(	"name" 		=> "John Locke", 
-					"cities" 	=> array("2","4"), 
-					"options" 	=> array("2"), 
-					"msg" 		=> "Hello Sir! How are you?");
-					
-$SF->set_default_values($defaults);
+# otherwise they WILL NOT WORK !				
+$SF->set_default_values(array("name" 	=> "John Locke"));
+$SF->set_default_values(array("cities" 	=> array("2","4")));
+$SF->set_default_values(array("options" => array("2")));
+$SF->set_default_values(array("msg"		=> "Hello Sir! How are you?"));
 				
 # catch form submission by submit element's name:
 # like: <input type='submit' name='formsubmit' value='Submit' />

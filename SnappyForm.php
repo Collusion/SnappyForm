@@ -24,6 +24,7 @@ class SnappyForm
 	private $failure;
 	private $default_values;
 	private $submit_elements;
+	private $submit_loading_value;
 
 	public function __construct()
 	{
@@ -65,6 +66,7 @@ class SnappyForm
 			$this->element_errors[$index] 			= array(); # element specific errors 
 			$this->element_values[$index] 			= array(); # element specific values 
 			$this->default_values[$index]			= array(); # default form element values
+			$this->submit_loading_value[$index]		= ""; # replace submit button's value / disable after submit ? 
 		}
 	}
 	
@@ -225,6 +227,26 @@ class SnappyForm
 	/* PUBLIC INTERFACING FUNCTIONS */
 	
 	/*
+	replaces the submit button's value with the given string & disables it after submit
+	*/
+	public function set_submit_loading_value($value)
+	{
+		# get active form's name
+		$index = $this->getActiveForm();
+		
+		if ( $value === false ) $value = "";
+		
+		if ( is_string($value) ) 
+		{
+			$this->submit_loading_value[$index] = $value;
+		}
+		else
+		{
+			trigger_error("set_submit_loading_value() expects a string or a (bool)false parameter, ".gettype($value)." given", E_USER_WARNING);
+		}
+	}
+	
+	/*
 	sets default values for the form inputs (if value not already set)
 	these will be overwritten by form submit
 	*/ 
@@ -379,7 +401,7 @@ class SnappyForm
 		# use default values only when:
 		# the submitted form is not the form we are currently printing
 		# OR the submitted form is the same form that was just reset
-		else if ( ($this->submitted_form != $index || $this->resetform == $this->submitted_form) && isset($this->default_values[$index][$element_name]) ) 
+		else if ( ($this->submitted_form != $index || $this->resetform === $this->submitted_form) && isset($this->default_values[$index][$element_name]) ) 
 		{
 			$element_data = &$this->default_values[$index][$element_name];
 		}
@@ -477,12 +499,14 @@ class SnappyForm
 				$prefix = $index . $this->separator;
 				$check_enabled	= $this->async_check[$index];
 				$submit_enabled	= $this->async_submit[$index];
+				$submit_value 	= $this->submit_loading_value[$index];
 				
-				if ( !$check_enabled && !$submit_enabled ) continue;
+				if ( !$check_enabled && !$submit_enabled && $submit_value == '' ) continue;
 				
 				if ( empty($target_file) ) $target_file = basename($_SERVER['SCRIPT_NAME']);
 				
 				$output .=  "\n(function() {\n".
+							"let rsv='$submit_value';\n".
 							"let prefix='$prefix';\n".
 							"let lm='".str_replace("'", "\'", $this->loading_msg[$index])."';\n".	
 							str_replace(array("myform", "demo.php", "check_enabled", "submit_enabled"), 
@@ -732,7 +756,7 @@ class SnappyForm
 
 		return NULL;
 	}
-	
+
 	/*
 	matches defined rules against form data 
 	returns false (if incorrect function names/parameters)
@@ -908,8 +932,7 @@ class SnappyForm
 			{
 				$this->success[$index] = false;
 				$this->failure[$index] = true;
-			}
-			
+			}	
 		}
 		
 		return $this->success[$index];

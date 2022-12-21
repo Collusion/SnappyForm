@@ -12,13 +12,16 @@ if ( sbmit != null && prefix != null )
 		form.addEventListener('focusout', inputDelegate((el) => checkElem('demo.php', form, el.target, 'myform', prefix, lm)));
 	}
 	
-	if ( submit_enabled )
-	{ 
-		form.addEventListener("submit", (event) => {
+	form.addEventListener("submit", (event) => {
+		if ( rsv != '' ) sv_og = set_submit_value(sbmit, rsv);
+		if ( submit_enabled )
+		{ 
+			if ( rsv != '' ) sbmit.disabled = true;
 			setVisibility(prefix+"snappy_success_msg", 0);
 			setVisibility(prefix+"snappy_failure_msg", 0);
 			event.preventDefault();
-			processForm('demo.php', form, prefix, lm);
-		});
-	}
+			processForm('demo.php', form, prefix, lm, sbmit);
+		}
+	});
+	
 }

@@ -1,4 +1,5 @@
 var er_tmp;
+var sv_og;
 // check if given element name attr refers to an array input
 // as in it has equal number if '[' and ']'
 function arrayName(n)
@@ -109,7 +110,24 @@ function loadingState(er, le, s, lm)
 	}
 }
 
-function request(file, q, er, le, prefix, lm, form)
+// replaces given button's value
+function set_submit_value(sbmit, v)
+{
+	let old;
+	if ( sbmit.nodeName.toLowerCase() == 'button' ) 
+	{
+		old = sbmit.innerHTML;
+		sbmit.innerHTML = v;
+	}
+	else
+	{
+		old = sbmit.getAttribute('value', v);
+		sbmit.setAttribute('value', v);
+	}
+	return old;
+}
+
+function request(file, q, er, le, prefix, lm, form, sbmit = null)
 {	
 	loadingState(er, le, 1, lm); // show loading message if available
 	
@@ -128,18 +146,25 @@ function request(file, q, er, le, prefix, lm, form)
 				if ( p == 'success_msg' && o[p] == 1 ) form.reset();
 				setVisibility(prefix+"snappy_"+p, o[p]);
 			}
+			
+			if ( sv_og != null )
+			{
+				 set_submit_value(sbmit, sv_og);
+				 sbmit.disabled = false;
+				 sv_og = null;
+			}
 		}
 	}
 	http.send(q);
 }
 
 // for submitting the whole form
-function processForm(file, form, prefix, lm)
+function processForm(file, form, prefix, lm, sbmit)
 {  
 	var arr = [];
 	for ( var i = 0; i < form.elements.length; ++i ) 
 	{
 		arr = getAllValues(form.elements[i], arr);
 	}
-	request(file, arr.join("&") + "&snappy_async_mode=2", null, null, prefix, lm, form);
+	request(file, arr.join("&") + "&snappy_async_mode=2", null, null, prefix, lm, form, sbmit);
 }
